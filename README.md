@@ -46,12 +46,34 @@ Open [http://localhost:3000](http://localhost:3000).
 | `npm run test:e2e` | E2E tests (Playwright) |
 | `npm run db:seed` | Reseed database |
 
-## Production
+## Deploy on Render (free tier)
 
-1. Set `DATABASE_URL` to PostgreSQL and change `provider` in `prisma/schema.prisma`.
-2. Set `AUTH_SECRET` / `NEXTAUTH_SECRET`, `NEXTAUTH_URL`.
+1. Push this repo to GitHub.
+2. In [Render](https://render.com): **New → Blueprint**.
+3. Connect repo `sdh` — Render reads [`render.yaml`](render.yaml) and creates:
+   - **Web Service** (`sdh-web`, free)
+   - **PostgreSQL** (`sdh-db`, free — expires after 90 days on free plan; upgrade for production)
+4. Wait for deploy (~5–10 min). First deploy runs migrations + seed (demo users).
+5. Open your app URL (`https://sdh-web-xxxx.onrender.com`). `NEXTAUTH_URL` is set automatically from `RENDER_EXTERNAL_URL`.
+
+**Manual Web Service** (if not using Blueprint):
+
+| Setting | Value |
+|---------|--------|
+| Type | Web Service |
+| Build | `npm ci && npx prisma migrate deploy && npm run build` |
+| Start | `sh -c 'export NEXTAUTH_URL="${RENDER_EXTERNAL_URL}" && npm run start'` |
+| Publish Directory | *(leave empty — not for Next.js server apps)* |
+
+Link a Render Postgres instance and set `DATABASE_URL`, `AUTH_SECRET`, `AUTH_TRUST_HOST=true`.
+
+**Free tier notes:** Service sleeps after ~15 min idle (cold start ~30s). Use **Web Service**, not Static Site.
+
+## Production (other hosts)
+
+1. PostgreSQL `DATABASE_URL` (included in Render blueprint).
+2. `AUTH_SECRET` / `NEXTAUTH_SECRET`, `NEXTAUTH_URL` (public app URL).
 3. Configure Stripe keys and webhook (`/api/v1/webhooks/stripe`).
-4. Deploy to Vercel or Docker.
 
 ## API
 
