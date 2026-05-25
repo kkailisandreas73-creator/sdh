@@ -14,7 +14,7 @@ services:
     plan: free
     region: frankfurt
     branch: main
-    buildCommand: npm ci && npx prisma migrate deploy && npm run build
+    buildCommand: npm ci && npx prisma migrate deploy && npm run build && npx prisma db seed
     startCommand: sh -c 'export NEXTAUTH_URL="${RENDER_EXTERNAL_URL}" && npm run start'
     healthCheckPath: /
     envVars:
@@ -33,4 +33,3 @@ services:
           envVarKey: AUTH_SECRET
       - key: AUTH_TRUST_HOST
         value: "true"
-    buildCommand: npm install && npm run build && npx prisma db seed
