@@ -250,6 +250,24 @@ CREATE TABLE "audit_logs" (
     CONSTRAINT "audit_logs_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "catalog_import_runs" (
+    "id" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'idle',
+    "phase" TEXT,
+    "message" TEXT,
+    "all_paths" JSONB,
+    "leaf_paths" JSONB,
+    "leaf_index" INTEGER NOT NULL DEFAULT 0,
+    "page_num" INTEGER NOT NULL DEFAULT 1,
+    "max_page" INTEGER NOT NULL DEFAULT 1,
+    "stats" JSONB NOT NULL DEFAULT '{}',
+    "error" TEXT,
+    "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "catalog_import_runs_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
 

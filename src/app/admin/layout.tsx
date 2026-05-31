@@ -9,6 +9,7 @@ const links = [
   { href: "/admin/quotes", label: "Quotes" },
   { href: "/admin/orders", label: "Orders" },
   { href: "/admin/pricing", label: "Pricing" },
+  { href: "/admin/import", label: "Import" },
 ];
 
 export default async function AdminLayout({
