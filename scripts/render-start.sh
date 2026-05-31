@@ -6,6 +6,9 @@ export NEXTAUTH_URL="${RENDER_EXTERNAL_URL}"
 echo "Applying schema..."
 node scripts/apply-schema.mjs
 
+echo "Verifying indexes..."
+node scripts/verify-indexes.mjs
+
 echo "Seeding database..."
 npx tsx db/seed.ts
 

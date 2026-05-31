@@ -41,6 +41,16 @@ if (existing.rowCount === 0) {
   console.log(`Migration ${MIGRATION_ID} already applied`);
 }
 
+const indexStatements = [
+  `CREATE INDEX IF NOT EXISTS categories_parent_id_idx ON categories(parent_id)`,
+  `CREATE INDEX IF NOT EXISTS categories_parent_id_sort_order_idx ON categories(parent_id, sort_order)`,
+  `CREATE INDEX IF NOT EXISTS categories_vertical_idx ON categories(vertical)`,
+];
+
+for (const stmt of indexStatements) {
+  await client.query(stmt);
+}
+
 await client.query(`
   CREATE TABLE IF NOT EXISTS catalog_import_runs (
     id TEXT PRIMARY KEY,

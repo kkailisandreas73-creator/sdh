@@ -46,7 +46,7 @@ export function CartView({
     return (
       <p className="text-slate-600">
         Your cart is empty.{" "}
-        <Link href="/industrial" className="text-[#c41e3a]">
+        <Link href="/" className="text-[#c41e3a]">
           Browse products
         </Link>
       </p>

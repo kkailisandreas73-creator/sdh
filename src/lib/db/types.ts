@@ -210,3 +210,7 @@ export type StaticPage = {
 export type CategoryWithChildren = Category & {
   children: Category[];
 };
+
+export type CategoryTree = Category & {
+  children: CategoryTree[];
+};

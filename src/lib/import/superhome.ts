@@ -9,11 +9,6 @@ export const SUPERHOME_PRICE_LIST_ID = "superhome-eur";
 const USER_AGENT =
   "Mozilla/5.0 (compatible; SDH-Importer/1.0; +https://github.com/kkailisandreas73-creator/sdh)";
 
-const VERTICAL_BY_ROOT: Record<string, string> = {
-  "furniture-storage": "FURNITURE",
-  "tools-equipment": "INDUSTRIAL",
-};
-
 export type SuperhomeProductJson = {
   "@type"?: string;
   name?: string;
@@ -54,9 +49,10 @@ export function titleCase(slug: string) {
     .join(" ");
 }
 
+/** Root category slug for the entire Superhome branch (stored in categories.vertical). */
 export function verticalForPath(segments: string[]) {
-  const root = segments[0] ?? "";
-  return VERTICAL_BY_ROOT[root] ?? "DIY";
+  if (segments.length === 0) return "uncategorized";
+  return categorySlugForPath([segments[0]]);
 }
 
 export function categorySlugForPath(segments: string[]) {

@@ -21,9 +21,16 @@ export type ImportPhase =
   | "done"
   | "error";
 
+export type ImportRunStatus =
+  | "idle"
+  | "running"
+  | "done"
+  | "error"
+  | "cancelled";
+
 export type ImportRunState = {
   id: string;
-  status: "idle" | "running" | "done" | "error";
+  status: ImportRunStatus;
   phase: ImportPhase;
   message: string;
   allPaths: string[][];
@@ -94,7 +101,7 @@ function rowToState(row: RunRow | undefined): ImportRunState {
   }
   return {
     id: row.id,
-    status: row.status as ImportRunState["status"],
+    status: row.status as ImportRunStatus,
     phase: (row.phase ?? "idle") as ImportPhase,
     message: row.message ?? "",
     allPaths: row.all_paths ?? [],
@@ -110,7 +117,7 @@ function rowToState(row: RunRow | undefined): ImportRunState {
 
 export function computeProgress(state: ImportRunState): number {
   if (state.status === "done") return 100;
-  if (state.status === "idle") return 0;
+  if (state.status === "idle" || state.status === "cancelled") return 0;
   if (state.phase === "cleaning") return 2;
   if (state.phase === "discovering") return 8;
   if (state.phase === "categories") return 12;
@@ -163,6 +170,11 @@ async function getRunRow(): Promise<RunRow | undefined> {
     [IMPORT_RUN_ID]
   );
   return rows[0];
+}
+
+async function isRunActive(): Promise<boolean> {
+  const row = await getRunRow();
+  return row?.status === "running";
 }
 
 export async function getImportState(): Promise<ImportRunState & { progress: number }> {
@@ -231,6 +243,10 @@ export async function runSuperhomeImportStep(): Promise<ImportRunState & { progr
     return getImportState();
   }
 
+  if (!(await isRunActive())) {
+    return getImportState();
+  }
+
   const leafPaths = row.leaf_paths ?? [];
   let leafIndex = row.leaf_index;
   let pageNum = row.page_num;
@@ -256,6 +272,10 @@ export async function runSuperhomeImportStep(): Promise<ImportRunState & { progr
     });
 
     const result = await importOneListingPage(segments, pageNum, cache, stats);
+    if (!(await isRunActive())) {
+      return getImportState();
+    }
+
     if (pageNum === 1) maxPage = result.maxPage;
 
     if (pageNum < maxPage) {
@@ -268,24 +288,30 @@ export async function runSuperhomeImportStep(): Promise<ImportRunState & { progr
     }
 
     const done = leafIndex >= leafPaths.length;
-    await updateRun({
-      status: done ? "done" : "running",
-      phase: done ? "done" : "importing",
-      message: done
-        ? `Import complete. ${stats.productsUpserted} products imported.`
-        : `Imported ${pathLabel} — ${stats.productsUpserted} products so far (${leafIndex} / ${leafPaths.length} categories)`,
-      leaf_index: leafIndex,
-      page_num: pageNum,
-      max_page: maxPage,
-      stats,
-    });
+    if (await isRunActive()) {
+      await updateRun({
+        status: done ? "done" : "running",
+        phase: done ? "done" : "importing",
+        message: done
+          ? `Import complete. ${stats.productsUpserted} products imported.`
+          : `Imported ${pathLabel} — ${stats.productsUpserted} products so far (${leafIndex} / ${leafPaths.length} categories)`,
+        leaf_index: leafIndex,
+        page_num: pageNum,
+        max_page: maxPage,
+        stats,
+      });
+    }
   } catch (e) {
+    if (!(await isRunActive())) {
+      return getImportState();
+    }
     const msg = e instanceof Error ? e.message : "Step failed";
     stats.categoriesFailed += 1;
     leafIndex += 1;
     pageNum = 1;
     maxPage = 1;
     await updateRun({
+      status: "running",
       message: `Skipped ${pathLabel}: ${msg}`,
       leaf_index: leafIndex,
       page_num: pageNum,
@@ -300,7 +326,7 @@ export async function runSuperhomeImportStep(): Promise<ImportRunState & { progr
 export async function cancelSuperhomeImport() {
   await ensureImportTable();
   await updateRun({
-    status: "idle",
+    status: "cancelled",
     phase: "idle",
     message: "Import cancelled.",
     error: null,

@@ -283,6 +283,12 @@ CREATE UNIQUE INDEX "products_slug_key" ON "products"("slug");
 -- CreateIndex
 CREATE INDEX "products_category_id_is_active_idx" ON "products"("category_id", "is_active");
 
+CREATE INDEX "categories_parent_id_idx" ON "categories"("parent_id");
+
+CREATE INDEX "categories_parent_id_sort_order_idx" ON "categories"("parent_id", "sort_order");
+
+CREATE INDEX "categories_vertical_idx" ON "categories"("vertical");
+
 -- CreateIndex
 CREATE UNIQUE INDEX "price_tiers_price_list_id_product_id_min_qty_key" ON "price_tiers"("price_list_id", "product_id", "min_qty");
 

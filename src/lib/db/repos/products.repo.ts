@@ -95,6 +95,7 @@ export async function findProductDetail(
 export async function listProducts(params: {
   vertical?: string | null;
   categorySlug?: string;
+  categorySubtreeId?: string;
   q?: string;
   page: number;
   pageSize: number;
@@ -107,7 +108,19 @@ export async function listProducts(params: {
     sqlParams.push(params.vertical);
     conditions.push(`c.vertical = $${sqlParams.length}`);
   }
-  if (params.categorySlug) {
+  if (params.categorySubtreeId) {
+    sqlParams.push(params.categorySubtreeId);
+    const i = sqlParams.length;
+    conditions.push(`c.id IN (
+      WITH RECURSIVE subtree AS (
+        SELECT id FROM categories WHERE id = $${i}
+        UNION ALL
+        SELECT c2.id FROM categories c2
+        INNER JOIN subtree s ON c2.parent_id = s.id
+      )
+      SELECT id FROM subtree
+    )`);
+  } else if (params.categorySlug) {
     sqlParams.push(params.categorySlug);
     conditions.push(`c.slug = $${sqlParams.length}`);
   }

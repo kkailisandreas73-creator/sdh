@@ -11,7 +11,7 @@ type ImportStats = {
 };
 
 type ImportState = {
-  status: "idle" | "running" | "done" | "error";
+  status: "idle" | "running" | "done" | "error" | "cancelled";
   phase: string;
   message: string;
   progress: number;
@@ -32,18 +32,29 @@ const emptyStats = (): ImportStats => ({
   categoriesFailed: 0,
 });
 
+function shouldStopLoop(status: ImportState["status"] | undefined) {
+  return (
+    status === "done" ||
+    status === "error" ||
+    status === "idle" ||
+    status === "cancelled"
+  );
+}
+
 export function SuperhomeImportPanel() {
   const [state, setState] = useState<ImportState | null>(null);
   const [busy, setBusy] = useState(false);
   const [log, setLog] = useState<string[]>([]);
   const runningRef = useRef(false);
+  const cancelRequestedRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   const appendLog = useCallback((msg: string) => {
     setLog((prev) => [...prev.slice(-80), `${new Date().toLocaleTimeString()} — ${msg}`]);
   }, []);
 
-  const refresh = useCallback(async () => {
-    const res = await fetch("/api/v1/admin/import/superhome");
+  const refresh = useCallback(async (signal?: AbortSignal) => {
+    const res = await fetch("/api/v1/admin/import/superhome", { signal });
     if (!res.ok) return;
     const data = await res.json();
     if (data.state) setState(data.state);
@@ -52,12 +63,17 @@ export function SuperhomeImportPanel() {
   const runSteps = useCallback(async () => {
     if (runningRef.current) return;
     runningRef.current = true;
+    cancelRequestedRef.current = false;
+    abortRef.current = new AbortController();
+    const signal = abortRef.current.signal;
+
     try {
-      while (true) {
+      while (!cancelRequestedRef.current) {
         const res = await fetch("/api/v1/admin/import/superhome", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "step" }),
+          signal,
         });
         const data = await res.json();
         const next = data.state as ImportState | undefined;
@@ -65,14 +81,27 @@ export function SuperhomeImportPanel() {
           setState(next);
           if (next.message) appendLog(next.message);
         }
-        if (!res.ok || next?.status === "done" || next?.status === "error" || next?.status === "idle") {
+        if (
+          cancelRequestedRef.current ||
+          signal.aborted ||
+          !res.ok ||
+          shouldStopLoop(next?.status)
+        ) {
           break;
         }
         await new Promise((r) => setTimeout(r, 200));
+        if (cancelRequestedRef.current || signal.aborted) break;
+      }
+    } catch (e) {
+      if (e instanceof Error && e.name === "AbortError") {
+        appendLog("Import loop stopped.");
+      } else {
+        appendLog(e instanceof Error ? e.message : "Step failed");
       }
     } finally {
       runningRef.current = false;
       setBusy(false);
+      abortRef.current = null;
     }
   }, [appendLog]);
 
@@ -88,14 +117,17 @@ export function SuperhomeImportPanel() {
     ) {
       return;
     }
+    cancelRequestedRef.current = false;
     setBusy(true);
     setLog([]);
     appendLog("Starting import…");
+    const signal = abortRef.current?.signal;
     try {
       const res = await fetch("/api/v1/admin/import/superhome", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "start" }),
+        signal,
       });
       const data = await res.json();
       if (!res.ok) {
@@ -109,32 +141,41 @@ export function SuperhomeImportPanel() {
         setState(next);
         appendLog(next.message);
       }
-      if (next?.status === "running") {
+      if (next?.status === "running" && !cancelRequestedRef.current) {
         await runSteps();
       } else {
         setBusy(false);
       }
     } catch (e) {
-      appendLog(e instanceof Error ? e.message : "Start failed");
+      if (e instanceof Error && e.name !== "AbortError") {
+        appendLog(e instanceof Error ? e.message : "Start failed");
+      }
       setBusy(false);
     }
   }
 
   async function handleCancel() {
-    setBusy(false);
+    cancelRequestedRef.current = true;
     runningRef.current = false;
-    await fetch("/api/v1/admin/import/superhome", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "cancel" }),
-    });
-    await refresh();
-    appendLog("Cancelled.");
+    abortRef.current?.abort();
+    setBusy(false);
+    try {
+      await fetch("/api/v1/admin/import/superhome", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "cancel" }),
+      });
+      await refresh();
+      appendLog("Cancelled.");
+    } catch (e) {
+      appendLog(e instanceof Error ? e.message : "Cancel failed");
+    }
   }
 
   const stats = state?.stats ?? emptyStats();
   const progress = state?.progress ?? 0;
-  const isRunning = state?.status === "running" || busy;
+  const isRunning =
+    (state?.status === "running" || busy) && state?.status !== "cancelled";
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -164,7 +205,7 @@ export function SuperhomeImportPanel() {
         <button
           type="button"
           onClick={handleCancel}
-          disabled={!isRunning}
+          disabled={!isRunning && state?.status !== "running"}
           className="rounded border px-4 py-2 text-sm disabled:opacity-50"
         >
           Cancel
@@ -172,6 +213,7 @@ export function SuperhomeImportPanel() {
         <button
           type="button"
           onClick={() => {
+            cancelRequestedRef.current = false;
             setBusy(true);
             appendLog("Resuming import…");
             runSteps();
@@ -183,7 +225,7 @@ export function SuperhomeImportPanel() {
         </button>
         <button
           type="button"
-          onClick={refresh}
+          onClick={() => refresh()}
           disabled={isRunning}
           className="rounded border px-4 py-2 text-sm disabled:opacity-50"
         >

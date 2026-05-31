@@ -1,7 +1,6 @@
 import { repos } from "@/lib/db";
 import type { ProductDetail } from "@/lib/db/types";
 import type { PublicProduct } from "@/types";
-import { verticalFromSlug } from "@/lib/utils";
 
 export function mapProduct(product: ProductDetail): PublicProduct {
   const available =
@@ -28,7 +27,11 @@ export function mapProduct(product: ProductDetail): PublicProduct {
 }
 
 export async function listCategories() {
-  return repos.categoriesRepo.listRootCategoriesWithChildren();
+  return repos.categoriesRepo.buildCategoryTree();
+}
+
+export async function listRootCategories() {
+  return repos.categoriesRepo.listRootCategories();
 }
 
 export async function listProductsPublic(params: {
@@ -40,10 +43,19 @@ export async function listProductsPublic(params: {
 }): Promise<{ items: PublicProduct[]; total: number; page: number; pageSize: number }> {
   const page = params.page ?? 1;
   const pageSize = params.pageSize ?? 24;
-  const vertical = params.vertical ? verticalFromSlug(params.vertical) : null;
+
+  let categorySubtreeId: string | undefined;
+  if (params.category) {
+    const cat = await repos.categoriesRepo.findCategoryBySlug(params.category);
+    if (!cat) {
+      return { items: [], total: 0, page, pageSize };
+    }
+    categorySubtreeId = cat.id;
+  }
+
   const { items, total } = await repos.productsRepo.listProducts({
-    vertical,
-    categorySlug: params.category,
+    vertical: params.vertical ?? null,
+    categorySubtreeId,
     q: params.q,
     page,
     pageSize,
@@ -55,6 +67,25 @@ export async function listProductsPublic(params: {
     page,
     pageSize,
   };
+}
+
+export async function listProductsForCategoryAdmin(params: {
+  categorySlug: string;
+  page?: number;
+  pageSize?: number;
+  activeOnly?: boolean;
+}) {
+  const cat = await repos.categoriesRepo.findCategoryBySlug(params.categorySlug);
+  if (!cat) return { items: [], total: 0, page: params.page ?? 1, pageSize: params.pageSize ?? 48 };
+  const page = params.page ?? 1;
+  const pageSize = params.pageSize ?? 48;
+  const { items, total } = await repos.productsRepo.listProducts({
+    categorySubtreeId: cat.id,
+    page,
+    pageSize,
+    activeOnly: params.activeOnly,
+  });
+  return { items, total, page, pageSize, category: cat };
 }
 
 export async function getProductBySlugPublic(

@@ -1,27 +1,20 @@
 import Link from "next/link";
+import { listRootCategories } from "@/lib/services/catalog.service";
 
-const categories = [
-  {
-    slug: "industrial",
-    title: "Industrial",
-    description: "Tools, safety equipment, and warehouse supplies.",
-    color: "from-slate-700 to-slate-900",
-  },
-  {
-    slug: "diy",
-    title: "DIY",
-    description: "Hardware, power tools, paint, and building supplies.",
-    color: "from-[#1e3a5f] to-[#2d5a87]",
-  },
-  {
-    slug: "furniture",
-    title: "Furniture",
-    description: "Office, warehouse, and commercial furniture at scale.",
-    color: "from-[#c41e3a] to-[#8b1529]",
-  },
+const cardColors = [
+  "from-slate-700 to-slate-900",
+  "from-[#1e3a5f] to-[#2d5a87]",
+  "from-[#c41e3a] to-[#8b1529]",
+  "from-emerald-700 to-emerald-900",
+  "from-amber-700 to-amber-900",
 ];
 
-export default function HomePage() {
+export const dynamic = "force-dynamic";
+
+export default async function HomePage() {
+  const roots = await listRootCategories();
+  const browseHref = roots[0] ? `/categories/${roots[0].slug}` : "/search";
+
   return (
     <div>
       <section className="bg-gradient-to-br from-[#1e3a5f] to-[#0f2744] text-white">
@@ -30,8 +23,7 @@ export default function HomePage() {
             Super Discount Wholesale
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-lg text-slate-200">
-            B2B pricing on industrial, DIY, and furniture — register for your
-            wholesale account and save on every order.
+            B2B wholesale catalog — register for your account and save on every order.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-4">
             <Link
@@ -41,7 +33,7 @@ export default function HomePage() {
               Open B2B Account
             </Link>
             <Link
-              href="/industrial"
+              href={browseHref}
               className="rounded-md border border-white/40 px-8 py-3 font-semibold hover:bg-white/10"
             >
               Browse Catalog
@@ -54,21 +46,26 @@ export default function HomePage() {
         <h2 className="text-center text-2xl font-bold text-slate-900">
           Shop by category
         </h2>
-        <div className="mt-10 grid gap-6 md:grid-cols-3">
-          {categories.map((cat) => (
-            <Link
-              key={cat.slug}
-              href={`/${cat.slug}`}
-              className={`rounded-xl bg-gradient-to-br ${cat.color} p-8 text-white shadow-lg transition hover:scale-[1.02]`}
-            >
-              <h3 className="text-2xl font-bold">{cat.title}</h3>
-              <p className="mt-2 text-sm text-white/80">{cat.description}</p>
-              <span className="mt-4 inline-block text-sm font-semibold underline">
-                Shop now →
-              </span>
-            </Link>
-          ))}
-        </div>
+        {roots.length === 0 ? (
+          <p className="mt-8 text-center text-slate-500">
+            Catalog coming soon. Sign in as admin to run an import.
+          </p>
+        ) : (
+          <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {roots.map((cat, i) => (
+              <Link
+                key={cat.slug}
+                href={`/categories/${cat.slug}`}
+                className={`rounded-xl bg-gradient-to-br ${cardColors[i % cardColors.length]} p-8 text-white shadow-lg transition hover:scale-[1.02]`}
+              >
+                <h3 className="text-2xl font-bold">{cat.name}</h3>
+                <span className="mt-4 inline-block text-sm font-semibold underline">
+                  Shop now →
+                </span>
+              </Link>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="border-t bg-white py-16">

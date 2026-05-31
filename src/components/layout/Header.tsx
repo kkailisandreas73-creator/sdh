@@ -1,16 +1,17 @@
 import Link from "next/link";
 import { auth } from "@/lib/auth/auth";
 import { SignOutButton } from "@/components/layout/SignOutButton";
-
-const verticals = [
-  { slug: "industrial", label: "Industrial" },
-  { slug: "diy", label: "DIY" },
-  { slug: "furniture", label: "Furniture" },
-];
+import { listRootCategories } from "@/lib/services/catalog.service";
 
 export async function Header() {
   const session = await auth();
   const user = session?.user as { role?: string; email?: string } | undefined;
+  let roots: Awaited<ReturnType<typeof listRootCategories>> = [];
+  try {
+    roots = await listRootCategories();
+  } catch (e) {
+    console.error("[header] failed to load categories:", e);
+  }
 
   return (
     <header className="border-b border-slate-200 bg-white shadow-sm">
@@ -24,14 +25,14 @@ export async function Header() {
           </span>
         </Link>
 
-        <nav className="flex flex-wrap items-center gap-6 text-sm font-medium text-slate-700">
-          {verticals.map((v) => (
+        <nav className="flex flex-wrap items-center gap-4 text-sm font-medium text-slate-700">
+          {roots.map((c) => (
             <Link
-              key={v.slug}
-              href={`/${v.slug}`}
+              key={c.slug}
+              href={`/categories/${c.slug}`}
               className="hover:text-[#c41e3a] transition-colors"
             >
-              {v.label}
+              {c.name}
             </Link>
           ))}
           <Link href="/search" className="hover:text-[#c41e3a]">
@@ -47,7 +48,10 @@ export async function Header() {
         <div className="flex items-center gap-3 text-sm">
           {user ? (
             <>
-              <Link href="/cart" className="rounded-md bg-[#1e3a5f] px-3 py-2 text-white hover:bg-[#2d5a87]">
+              <Link
+                href="/cart"
+                className="rounded-md bg-[#1e3a5f] px-3 py-2 text-white hover:bg-[#2d5a87]"
+              >
                 Cart
               </Link>
               <Link href="/orders" className="text-slate-600 hover:text-[#c41e3a]">
