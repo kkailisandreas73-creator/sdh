@@ -2,6 +2,7 @@
 set -e
 
 export NEXTAUTH_URL="${RENDER_EXTERNAL_URL}"
+export SDH_RUN_MIGRATIONS=1
 
 echo "Running database migrations..."
 npx prisma migrate deploy

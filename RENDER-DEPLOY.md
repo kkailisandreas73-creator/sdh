@@ -6,7 +6,9 @@ If your deploy log shows:
 Running build command 'npm ci && npx prisma migrate deploy && npm run build && npx prisma db seed'...
 ```
 
-Render is **not** using this repo’s `render.yaml`. That command will always fail with `P1001`.
+Render is **not** using this repo’s `render.yaml`. That command used to fail with `P1001`.
+
+**Note:** Recent commits install a Prisma shim on Render so the legacy build command skips `migrate deploy` / `db seed` during build and runs them at start. You should still update the build command when possible.
 
 ## Fix (choose one)
 
