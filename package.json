@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "db:seed": "tsx db/seed.ts",
-    "db:schema": "node scripts/apply-schema.mjs"
+    "db:schema": "node scripts/apply-schema.mjs",
+    "import:superhome": "node scripts/import-superhome.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

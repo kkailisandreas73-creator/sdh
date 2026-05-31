@@ -50,6 +50,26 @@ Open [http://localhost:3000](http://localhost:3000).
 | `npm run test:e2e` | E2E tests (Playwright) |
 | `npm run db:schema` | Apply [`db/schema.sql`](db/schema.sql) |
 | `npm run db:seed` | Load demo data |
+| `npm run import:superhome` | One-time import from [superhome.com.cy](https://superhome.com.cy/) |
+
+### Import Superhome catalog (one-time)
+
+Crawls all category URLs from the live site, paginates each listing (`?PageNum=N`), and loads products from schema.org JSON-LD (names, SKUs, EUR prices, image URLs). Categories are stored under slugs prefixed with `sh-`.
+
+```bash
+# Preview (no database)
+npm run import:superhome -- --dry-run
+
+# Full import (needs DATABASE_URL; takes hours — ~400 leaf categories, many pages each)
+npm run import:superhome -- --replace-superhome --delay 400
+
+# Small test
+npm run import:superhome -- --limit-categories 5
+```
+
+On Render: **Shell** → `node scripts/import-superhome.mjs --replace-superhome` (uses the service `DATABASE_URL`).
+
+Options: `--replace-superhome` (delete prior import), `--limit-categories N`, `--delay MS`, `--deep-discover`.
 
 ## Deploy on Render (free tier)
 
