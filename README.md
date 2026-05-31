@@ -61,7 +61,9 @@ Open [http://localhost:3000](http://localhost:3000).
 | Setting | Value |
 |---------|--------|
 | Type | Web Service |
-| Build | `npm ci && npx prisma migrate deploy && npm run build` |
+| Region | **Oregon** (must match Postgres region for internal `DATABASE_URL`) |
+| Build | `npm ci && npm run build` |
+| Pre-Deploy | `npx prisma migrate deploy && npx prisma db seed` |
 | Start | `sh -c 'export NEXTAUTH_URL="${RENDER_EXTERNAL_URL}" && npm run start'` |
 | Publish Directory | *(leave empty — not for Next.js server apps)* |
 

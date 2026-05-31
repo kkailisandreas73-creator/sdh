@@ -12,9 +12,10 @@ services:
     name: sdh-web
     runtime: node
     plan: free
-    region: frankfurt
+    region: oregon
     branch: main
-    buildCommand: npm ci && npx prisma migrate deploy && npm run build && npx prisma db seed
+    buildCommand: npm ci && npm run build
+    preDeployCommand: npx prisma migrate deploy && npx prisma db seed
     startCommand: sh -c 'export NEXTAUTH_URL="${RENDER_EXTERNAL_URL}" && npm run start'
     healthCheckPath: /
     envVars:
