@@ -2,6 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser, isAdmin } from "@/lib/auth/session";
 
+export const dynamic = "force-dynamic";
+
 const links = [
   { href: "/admin", label: "Dashboard" },
   { href: "/admin/accounts", label: "Accounts" },

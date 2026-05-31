@@ -49,14 +49,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.accountStatus = u.accountStatus;
         token.paymentTerms = u.paymentTerms;
       } else if (token.id) {
-        const row = await repos.usersRepo.findUserWithAccountById(
-          token.id as string
-        );
-        if (row) {
-          token.role = row.user.role;
-          token.accountId = row.user.accountId;
-          token.accountStatus = row.account?.status ?? null;
-          token.paymentTerms = row.account?.paymentTerms ?? null;
+        try {
+          const row = await repos.usersRepo.findUserWithAccountById(
+            token.id as string
+          );
+          if (row) {
+            token.role = row.user.role;
+            token.accountId = row.user.accountId;
+            token.accountStatus = row.account?.status ?? null;
+            token.paymentTerms = row.account?.paymentTerms ?? null;
+          }
+        } catch (e) {
+          console.error("[auth] jwt refresh failed:", e);
         }
       }
       return token;

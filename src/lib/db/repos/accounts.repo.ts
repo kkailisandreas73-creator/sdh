@@ -91,8 +91,8 @@ export async function updateAccount(
 }
 
 export async function countPendingAccounts() {
-  const { rows } = await query(
+  const { rows } = await query<{ count: string }>(
     `SELECT COUNT(*)::text AS count FROM accounts WHERE status = 'PENDING'`
   );
-  return Number(rows[0].count);
+  return Number(rows[0]?.count ?? 0);
 }

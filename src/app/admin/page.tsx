@@ -1,11 +1,22 @@
 import Link from "next/link";
 import { repos } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
+async function safeCount(label: string, fn: () => Promise<number>) {
+  try {
+    return await fn();
+  } catch (e) {
+    console.error(`[admin] ${label}:`, e);
+    return 0;
+  }
+}
+
 export default async function AdminDashboard() {
   const [pending, orders, quotes] = await Promise.all([
-    repos.accountsRepo.countPendingAccounts(),
-    repos.ordersRepo.countOrders(),
-    repos.ordersRepo.countQuotesByStatus("SUBMITTED"),
+    safeCount("pending accounts", () => repos.accountsRepo.countPendingAccounts()),
+    safeCount("orders", () => repos.ordersRepo.countOrders()),
+    safeCount("quotes", () => repos.ordersRepo.countQuotesByStatus("SUBMITTED")),
   ]);
 
   return (

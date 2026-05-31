@@ -41,4 +41,21 @@ if (existing.rowCount === 0) {
   console.log(`Migration ${MIGRATION_ID} already applied`);
 }
 
+await client.query(`
+  CREATE TABLE IF NOT EXISTS catalog_import_runs (
+    id TEXT PRIMARY KEY,
+    status TEXT NOT NULL DEFAULT 'idle',
+    phase TEXT,
+    message TEXT,
+    all_paths JSONB,
+    leaf_paths JSONB,
+    leaf_index INTEGER NOT NULL DEFAULT 0,
+    page_num INTEGER NOT NULL DEFAULT 1,
+    max_page INTEGER NOT NULL DEFAULT 1,
+    stats JSONB NOT NULL DEFAULT '{}',
+    error TEXT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )
+`);
+
 await client.end();

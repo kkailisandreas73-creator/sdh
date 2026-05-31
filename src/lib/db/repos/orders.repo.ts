@@ -220,14 +220,16 @@ export async function listAllOrders() {
 }
 
 export async function countOrders() {
-  const { rows } = await query(`SELECT COUNT(*)::text AS count FROM orders`);
-  return Number(rows[0].count);
+  const { rows } = await query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM orders`
+  );
+  return Number(rows[0]?.count ?? 0);
 }
 
 export async function countQuotesByStatus(status: string) {
-  const { rows } = await query(
+  const { rows } = await query<{ count: string }>(
     `SELECT COUNT(*)::text AS count FROM quotes WHERE status = $1`,
     [status]
   );
-  return Number(rows[0].count);
+  return Number(rows[0]?.count ?? 0);
 }

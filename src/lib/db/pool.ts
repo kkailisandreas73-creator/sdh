@@ -1,13 +1,18 @@
 import pg from "pg";
+import { getPoolConfig } from "./connection";
 
 const globalForPool = globalThis as unknown as { pgPool?: pg.Pool };
 
-export const pool =
-  globalForPool.pgPool ??
-  new pg.Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 10,
-  });
+function createPool() {
+  try {
+    return new pg.Pool(getPoolConfig());
+  } catch (e) {
+    console.error("[db] Pool init failed:", e);
+    throw e;
+  }
+}
+
+export const pool = globalForPool.pgPool ?? createPool();
 
 if (process.env.NODE_ENV !== "production") {
   globalForPool.pgPool = pool;
