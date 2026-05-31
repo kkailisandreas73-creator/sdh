@@ -3,9 +3,10 @@ import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { repos } from "@/lib/db";
 import type { SessionUser } from "@/types";
+import { authConfig } from "./auth.config";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  trustHost: true,
+  ...authConfig,
   providers: [
     Credentials({
       credentials: {
@@ -35,11 +36,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
-  session: { strategy: "jwt" },
-  pages: {
-    signIn: "/login",
-  },
   callbacks: {
+    ...authConfig.callbacks,
     async jwt({ token, user }) {
       if (user) {
         const u = user as SessionUser;
@@ -64,18 +62,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
       }
       return token;
-    },
-    async session({ session, token }) {
-      if (session.user) {
-        (session.user as SessionUser).id = token.id as string;
-        (session.user as SessionUser).role = token.role as "BUYER" | "ADMIN";
-        (session.user as SessionUser).accountId = (token.accountId as string) ?? null;
-        (session.user as SessionUser).accountStatus =
-          (token.accountStatus as string) ?? null;
-        (session.user as SessionUser).paymentTerms =
-          (token.paymentTerms as string) ?? null;
-      }
-      return session;
     },
   },
 });
