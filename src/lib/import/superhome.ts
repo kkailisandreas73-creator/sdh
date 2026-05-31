@@ -159,15 +159,47 @@ export async function discoverCategoryPaths(): Promise<string[][]> {
   return unique;
 }
 
+export function dedupePaths(paths: string[][]): string[][] {
+  const seen = new Set<string>();
+  const out: string[][] = [];
+  for (const segments of paths) {
+    const key = segments.join("/");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(segments);
+  }
+  return out;
+}
+
 export function leafCategoryPaths(all: string[][]) {
   const keys = new Set(all.map((s) => s.join("/")));
-  return all.filter((segments) => {
-    const prefix = `${segments.join("/")}/`;
-    for (const key of keys) {
-      if (key.startsWith(prefix)) return false;
+  return dedupePaths(
+    all.filter((segments) => {
+      const prefix = `${segments.join("/")}/`;
+      for (const key of keys) {
+        if (key.startsWith(prefix)) return false;
+      }
+      return true;
+    })
+  );
+}
+
+/** Every prefix path needed to build the category tree (unique, parents before children). */
+export function allPrefixPaths(paths: string[][]): string[][] {
+  const seen = new Set<string>();
+  const out: string[][] = [];
+  for (const segments of paths) {
+    for (let depth = 1; depth <= segments.length; depth++) {
+      const prefix = segments.slice(0, depth);
+      const key = prefix.join("/");
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(prefix);
     }
-    return true;
-  });
+  }
+  return out.sort(
+    (a, b) => a.length - b.length || a.join("/").localeCompare(b.join("/"))
+  );
 }
 
 export async function ensureSuperhomePriceList(client: DbClient = pool) {
@@ -179,65 +211,88 @@ export async function ensureSuperhomePriceList(client: DbClient = pool) {
   );
 }
 
+/** Build category rows once (sequential). Product workers only import distinct leaves. */
 export async function upsertCategoryTree(
   allPaths: string[][],
   cache: Map<string, string>,
   client: DbClient = pool
 ) {
-  const byDepth = new Map<number, string[][]>();
-  for (const segments of allPaths) {
-    const depth = segments.length;
-    const list = byDepth.get(depth) ?? [];
-    list.push(segments);
-    byDepth.set(depth, list);
+  const inflight = new Map<string, Promise<string>>();
+  for (const segments of allPrefixPaths(allPaths)) {
+    await upsertCategory(segments, cache, client, inflight);
   }
-  const depths = [...byDepth.keys()].sort((a, b) => a - b);
-  const { categories: concurrency } = importConcurrency();
-  for (const depth of depths) {
-    const paths = byDepth.get(depth) ?? [];
-    await runPool(paths, concurrency, (segments) => upsertCategory(segments, cache, client));
+}
+
+/** Resolve DB ids for leaf categories (tree must already exist). */
+export async function loadLeafCategoryIds(
+  leafPaths: string[][],
+  client: DbClient = pool
+): Promise<Map<string, string>> {
+  const slugs = leafPaths.map((segments) => categorySlugForPath(segments));
+  const { rows } = await client.query<{ slug: string; id: string }>(
+    `SELECT slug, id FROM categories WHERE slug = ANY($1::text[])`,
+    [slugs]
+  );
+  const bySlug = new Map(rows.map((r) => [r.slug, r.id]));
+  const cache = new Map<string, string>();
+  for (const segments of leafPaths) {
+    const key = segments.join("/");
+    const id = bySlug.get(categorySlugForPath(segments));
+    if (!id) {
+      throw new Error(`Category not found for leaf path ${key}`);
+    }
+    cache.set(key, id);
   }
+  return cache;
 }
 
 export async function upsertCategory(
   segments: string[],
   cache: Map<string, string>,
-  client: DbClient = pool
+  client: DbClient = pool,
+  inflight: Map<string, Promise<string>> = new Map()
 ): Promise<string> {
   const key = segments.join("/");
   const cached = cache.get(key);
   if (cached) return cached;
 
-  let parentId: string | null = null;
-  if (segments.length > 1) {
-    parentId = await upsertCategory(segments.slice(0, -1), cache, client);
-  }
+  const pending = inflight.get(key);
+  if (pending) return pending;
 
-  const slug = categorySlugForPath(segments);
-  const name = titleCase(segments[segments.length - 1]);
-  const vertical = verticalForPath(segments);
-  const sortOrder = segments.length;
+  const work = (async () => {
+    let parentId: string | null = null;
+    if (segments.length > 1) {
+      parentId = await upsertCategory(segments.slice(0, -1), cache, client, inflight);
+    }
 
-  const existing = await client.query<{ id: string }>(
-    `SELECT id FROM categories WHERE slug = $1`,
-    [slug]
-  );
-  let id = existing.rows[0]?.id;
-  if (!id) {
-    id = newId();
-    await client.query(
+    const slug = categorySlugForPath(segments);
+    const name = titleCase(segments[segments.length - 1]);
+    const vertical = verticalForPath(segments);
+    const sortOrder = segments.length;
+
+    const { rows } = await client.query<{ id: string }>(
       `INSERT INTO categories (id, slug, name, vertical, parent_id, sort_order)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [id, slug, name, vertical, parentId, sortOrder]
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (slug) DO UPDATE SET
+         name = EXCLUDED.name,
+         vertical = EXCLUDED.vertical,
+         parent_id = EXCLUDED.parent_id,
+         sort_order = EXCLUDED.sort_order
+       RETURNING id`,
+      [newId(), slug, name, vertical, parentId, sortOrder]
     );
-  } else {
-    await client.query(
-      `UPDATE categories SET name = $2, vertical = $3, parent_id = $4, sort_order = $5 WHERE id = $1`,
-      [id, name, vertical, parentId, sortOrder]
-    );
+    const id = rows[0]?.id;
+    if (!id) throw new Error(`Failed to upsert category ${slug}`);
+    cache.set(key, id);
+    return id;
+  })();
+
+  inflight.set(key, work);
+  try {
+    return await work;
+  } finally {
+    inflight.delete(key);
   }
-  cache.set(key, id);
-  return id;
 }
 
 export async function upsertSuperhomeProduct(
@@ -426,14 +481,13 @@ export async function importOneListingPage(
   return { maxPage, productCount: products.length };
 }
 
-/** Fetch all listing pages for a leaf category in parallel, then upsert products. */
-export async function importLeafCategory(
+/** Import products for one leaf category (category row must already exist). */
+export async function importLeafCategoryProducts(
   segments: string[],
-  cache: Map<string, string>,
+  categoryId: string,
   stats: ImportStats,
   client: DbClient = pool
 ): Promise<{ maxPage: number }> {
-  const categoryId = await upsertCategory(segments, cache, client);
   const baseUrl = categoryUrlFromSegments(segments);
   const { pages: pageConcurrency } = importConcurrency();
 

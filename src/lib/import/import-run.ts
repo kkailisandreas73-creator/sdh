@@ -1,11 +1,13 @@
 import { cleanupCatalog } from "@/lib/import/catalog-cleanup";
-import { importConcurrency, runPool } from "@/lib/import/concurrency";
+import { importConcurrency, runDistinctWorkers } from "@/lib/import/concurrency";
 import {
+  dedupePaths,
   discoverCategoryPaths,
   emptyStats,
   ensureSuperhomePriceList,
-  importLeafCategory,
+  importLeafCategoryProducts,
   leafCategoryPaths,
+  loadLeafCategoryIds,
   mergeImportStats,
   upsertCategoryTree,
   type ImportStats,
@@ -276,7 +278,6 @@ export async function runSuperhomeImportStep(): Promise<ImportRunState & { progr
   const leafPaths = row.leaf_paths ?? [];
   let leafIndex = row.leaf_index;
   const stats = { ...emptyStats(), ...(row.stats ?? {}) };
-  const cache = new Map<string, string>();
   const { categories: categoryConcurrency } = importConcurrency();
 
   if (leafIndex >= leafPaths.length) {
@@ -288,22 +289,36 @@ export async function runSuperhomeImportStep(): Promise<ImportRunState & { progr
     return getImportState();
   }
 
-  const batch = leafPaths.slice(leafIndex, leafIndex + categoryConcurrency);
+  const batch = dedupePaths(
+    leafPaths.slice(leafIndex, leafIndex + categoryConcurrency)
+  );
   const batchEnd = leafIndex + batch.length;
+  const pathLabel = (segments: string[]) => segments.join("/");
 
   try {
+    const categoryIds = await loadLeafCategoryIds(batch);
+
     await updateRun({
-      message: `Importing ${batch.length} categories in parallel (${leafIndex + 1}–${batchEnd} / ${leafPaths.length})…`,
+      message: `Importing ${batch.length} categories in parallel (${leafIndex + 1}–${batchEnd} / ${leafPaths.length}): ${batch.map(pathLabel).join(", ")}`,
     });
 
-    const partStats = await runPool(batch, categoryConcurrency, async (segments) => {
+    const partStats = await runDistinctWorkers(batch, async (segments, workerIndex) => {
       if (!(await isRunActive())) return emptyStats();
       const part = emptyStats();
-      try {
-        await importLeafCategory(segments, cache, part);
-        part.categoriesDone = 1;
-      } catch {
+      const categoryId = categoryIds.get(pathLabel(segments));
+      if (!categoryId) {
         part.categoriesFailed = 1;
+        return part;
+      }
+      try {
+        await importLeafCategoryProducts(segments, categoryId, part);
+        part.categoriesDone = 1;
+      } catch (e) {
+        part.categoriesFailed = 1;
+        console.error(
+          `[import] worker ${workerIndex} failed on ${pathLabel(segments)}:`,
+          e
+        );
       }
       return part;
     });

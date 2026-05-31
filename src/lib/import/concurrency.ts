@@ -21,6 +21,18 @@ export async function runPool<T, R>(
   return results;
 }
 
+/**
+ * Each worker processes a different item (0..n-1); no shared work queue.
+ * Use when each item is a distinct category/path.
+ */
+export async function runDistinctWorkers<T, R>(
+  items: T[],
+  fn: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  if (items.length === 0) return [];
+  return Promise.all(items.map((item, index) => fn(item, index)));
+}
+
 export function importConcurrency() {
   const categories = Math.max(
     1,
