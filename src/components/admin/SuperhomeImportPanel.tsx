@@ -89,7 +89,7 @@ export function SuperhomeImportPanel() {
         ) {
           break;
         }
-        await new Promise((r) => setTimeout(r, 200));
+        await new Promise((r) => setTimeout(r, 80));
         if (cancelRequestedRef.current || signal.aborted) break;
       }
     } catch (e) {
@@ -120,36 +120,41 @@ export function SuperhomeImportPanel() {
     cancelRequestedRef.current = false;
     setBusy(true);
     setLog([]);
-    appendLog("Starting import…");
-    const signal = abortRef.current?.signal;
+    appendLog("Clearing catalog…");
     try {
       const res = await fetch("/api/v1/admin/import/superhome", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "start" }),
-        signal,
       });
-      const data = await res.json();
+      let data: { state?: ImportState; error?: { message?: string; details?: { state?: ImportState } } };
+      try {
+        data = await res.json();
+      } catch {
+        appendLog(res.ok ? "Invalid response from server" : `Start failed (${res.status})`);
+        setBusy(false);
+        return;
+      }
       if (!res.ok) {
-        appendLog(data.error?.message ?? "Start failed");
+        appendLog(data.error?.message ?? `Start failed (${res.status})`);
         if (data.error?.details?.state) setState(data.error.details.state);
         setBusy(false);
         return;
       }
-      const next = data.state as ImportState;
+      const next = data.state as ImportState | undefined;
       if (next) {
         setState(next);
         appendLog(next.message);
       }
       if (next?.status === "running" && !cancelRequestedRef.current) {
+        appendLog("Continuing with category discovery and product import…");
         await runSteps();
       } else {
+        appendLog(next?.status ? `Import did not start (status: ${next.status})` : "No import state returned");
         setBusy(false);
       }
     } catch (e) {
-      if (e instanceof Error && e.name !== "AbortError") {
-        appendLog(e instanceof Error ? e.message : "Start failed");
-      }
+      appendLog(e instanceof Error ? e.message : "Start failed");
       setBusy(false);
     }
   }

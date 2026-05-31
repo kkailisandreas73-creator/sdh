@@ -159,18 +159,36 @@ export async function findProductById(id: string): Promise<Product | null> {
   return rows[0] ? mapProduct(rows[0]) : null;
 }
 
-export async function listProductsAdmin(): Promise<ProductDetail[]> {
-  const { rows } = await query(
-    `${productSelect} ORDER BY p.name ASC`
-  );
+export async function countProductsAdmin(): Promise<number> {
+  const { rows } = await query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM products`);
+  return Number(rows[0]?.count ?? 0);
+}
+
+export async function listProductsAdmin(params: {
+  page: number;
+  pageSize: number;
+}): Promise<{ items: ProductDetail[]; total: number; page: number; pageSize: number }> {
+  const page = Math.max(1, params.page);
+  const pageSize = Math.min(100, Math.max(1, params.pageSize));
+  const offset = (page - 1) * pageSize;
+
+  const [countResult, { rows }] = await Promise.all([
+    query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM products`),
+    query(
+      `${productSelect} ORDER BY p.name ASC LIMIT $1 OFFSET $2`,
+      [pageSize, offset]
+    ),
+  ]);
+  const total = Number(countResult.rows[0]?.count ?? 0);
   const ids = rows.map((r) => r.id as string);
   const images = await loadImages(ids);
   const inv = await loadInventory(ids);
-  return Promise.all(
+  const items = await Promise.all(
     rows.map((r) =>
       toProductDetail(r, images.get(r.id as string) ?? [], inv.get(r.id as string) ?? null)
     )
   );
+  return { items, total, page, pageSize };
 }
 
 export async function createProduct(data: {

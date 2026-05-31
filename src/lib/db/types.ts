@@ -214,3 +214,9 @@ export type CategoryWithChildren = Category & {
 export type CategoryTree = Category & {
   children: CategoryTree[];
 };
+
+/** Flat category row for admin tree (depth and counts from SQL). */
+export type CategoryAdminRow = Category & {
+  depth: number;
+  productCount: number;
+};

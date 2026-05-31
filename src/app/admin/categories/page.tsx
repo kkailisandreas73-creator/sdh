@@ -4,7 +4,7 @@ import { CategoryTree } from "@/components/admin/CategoryTree";
 export const dynamic = "force-dynamic";
 
 export default async function AdminCategoriesPage() {
-  const tree = await repos.categoriesRepo.buildCategoryTree();
+  const rows = await repos.categoriesRepo.listCategoryAdminRows();
 
   return (
     <div>
@@ -13,7 +13,7 @@ export default async function AdminCategoriesPage() {
         Browse the category tree. Click a category to view products in that branch.
       </p>
       <div className="mt-6">
-        <CategoryTree tree={tree} />
+        <CategoryTree rows={rows} />
       </div>
     </div>
   );

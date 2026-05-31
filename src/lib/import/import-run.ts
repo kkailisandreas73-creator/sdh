@@ -1,10 +1,12 @@
 import { cleanupCatalog } from "@/lib/import/catalog-cleanup";
+import { importConcurrency, runPool } from "@/lib/import/concurrency";
 import {
   discoverCategoryPaths,
   emptyStats,
   ensureSuperhomePriceList,
-  importOneListingPage,
+  importLeafCategory,
   leafCategoryPaths,
+  mergeImportStats,
   upsertCategoryTree,
   type ImportStats,
 } from "@/lib/import/superhome";
@@ -196,7 +198,8 @@ export async function startSuperhomeImport(): Promise<ImportRunState & { progres
      VALUES ($1, 'running', 'cleaning', 'Removing all products and categories…', 0, 1, 1, $2, NOW())
      ON CONFLICT (id) DO UPDATE SET
        status = 'running', phase = 'cleaning', message = 'Removing all products and categories…',
-       leaf_index = 0, page_num = 1, max_page = 1, stats = $2, error = NULL, updated_at = NOW()`,
+       leaf_index = 0, page_num = 1, max_page = 1, all_paths = NULL, leaf_paths = NULL,
+       stats = $2, error = NULL, updated_at = NOW()`,
     [IMPORT_RUN_ID, JSON.stringify(stats)]
   );
 
@@ -204,37 +207,41 @@ export async function startSuperhomeImport(): Promise<ImportRunState & { progres
     await cleanupCatalog();
     await updateRun({
       phase: "discovering",
-      message: "Fetching category list from superhome.com.cy…",
+      message: "Catalog cleared. Next step: discover categories…",
     });
-
-    const allPaths = await discoverCategoryPaths();
-    const leaves = leafCategoryPaths(allPaths);
-
-    await updateRun({
-      phase: "categories",
-      message: `Building category tree (${allPaths.length} categories)…`,
-      all_paths: allPaths,
-      leaf_paths: leaves,
-    });
-
-    await ensureSuperhomePriceList();
-    const cache = new Map<string, string>();
-    await upsertCategoryTree(allPaths, cache);
-
-    await updateRun({
-      phase: "importing",
-      message: `Importing products (0 / ${leaves.length} categories)…`,
-      leaf_index: 0,
-      page_num: 1,
-      max_page: 1,
-    });
-
     return getImportState();
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Import failed";
     await updateRun({ status: "error", phase: "error", message: msg, error: msg });
     throw e;
   }
+}
+
+async function runDiscoverStep(): Promise<void> {
+  const allPaths = await discoverCategoryPaths();
+  const leaves = leafCategoryPaths(allPaths);
+  await updateRun({
+    phase: "categories",
+    message: `Building category tree (${allPaths.length} categories)…`,
+    all_paths: allPaths,
+    leaf_paths: leaves,
+  });
+}
+
+async function runCategoriesStep(): Promise<void> {
+  const row = await getRunRow();
+  const allPaths = row?.all_paths ?? [];
+  await ensureSuperhomePriceList();
+  const cache = new Map<string, string>();
+  await upsertCategoryTree(allPaths, cache);
+  const leaves = row?.leaf_paths ?? [];
+  await updateRun({
+    phase: "importing",
+    message: `Importing products (0 / ${leaves.length} categories)…`,
+    leaf_index: 0,
+    page_num: 1,
+    max_page: 1,
+  });
 }
 
 export async function runSuperhomeImportStep(): Promise<ImportRunState & { progress: number }> {
@@ -247,12 +254,30 @@ export async function runSuperhomeImportStep(): Promise<ImportRunState & { progr
     return getImportState();
   }
 
+  const phase = (row.phase ?? "idle") as ImportPhase;
+  try {
+    if (phase === "discovering") {
+      await updateRun({ message: "Fetching category list from superhome.com.cy…" });
+      await runDiscoverStep();
+      if (!(await isRunActive())) return getImportState();
+      return getImportState();
+    }
+    if (phase === "categories") {
+      await runCategoriesStep();
+      if (!(await isRunActive())) return getImportState();
+      return getImportState();
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Prepare step failed";
+    await updateRun({ status: "error", phase: "error", message: msg, error: msg });
+    throw e;
+  }
+
   const leafPaths = row.leaf_paths ?? [];
   let leafIndex = row.leaf_index;
-  let pageNum = row.page_num;
-  let maxPage = row.max_page;
   const stats = { ...emptyStats(), ...(row.stats ?? {}) };
   const cache = new Map<string, string>();
+  const { categories: categoryConcurrency } = importConcurrency();
 
   if (leafIndex >= leafPaths.length) {
     await updateRun({
@@ -263,28 +288,31 @@ export async function runSuperhomeImportStep(): Promise<ImportRunState & { progr
     return getImportState();
   }
 
-  const segments = leafPaths[leafIndex];
-  const pathLabel = segments.join("/");
+  const batch = leafPaths.slice(leafIndex, leafIndex + categoryConcurrency);
+  const batchEnd = leafIndex + batch.length;
 
   try {
     await updateRun({
-      message: `Importing ${pathLabel} (page ${pageNum}${maxPage > 1 ? ` of ${maxPage}` : ""}) — category ${leafIndex + 1} / ${leafPaths.length}`,
+      message: `Importing ${batch.length} categories in parallel (${leafIndex + 1}–${batchEnd} / ${leafPaths.length})…`,
     });
 
-    const result = await importOneListingPage(segments, pageNum, cache, stats);
+    const partStats = await runPool(batch, categoryConcurrency, async (segments) => {
+      if (!(await isRunActive())) return emptyStats();
+      const part = emptyStats();
+      try {
+        await importLeafCategory(segments, cache, part);
+        part.categoriesDone = 1;
+      } catch {
+        part.categoriesFailed = 1;
+      }
+      return part;
+    });
+
+    for (const part of partStats) mergeImportStats(stats, part);
+    leafIndex = batchEnd;
+
     if (!(await isRunActive())) {
       return getImportState();
-    }
-
-    if (pageNum === 1) maxPage = result.maxPage;
-
-    if (pageNum < maxPage) {
-      pageNum += 1;
-    } else {
-      stats.categoriesDone += 1;
-      leafIndex += 1;
-      pageNum = 1;
-      maxPage = 1;
     }
 
     const done = leafIndex >= leafPaths.length;
@@ -294,10 +322,10 @@ export async function runSuperhomeImportStep(): Promise<ImportRunState & { progr
         phase: done ? "done" : "importing",
         message: done
           ? `Import complete. ${stats.productsUpserted} products imported.`
-          : `Imported ${pathLabel} — ${stats.productsUpserted} products so far (${leafIndex} / ${leafPaths.length} categories)`,
+          : `${stats.productsUpserted} products imported (${leafIndex} / ${leafPaths.length} categories)`,
         leaf_index: leafIndex,
-        page_num: pageNum,
-        max_page: maxPage,
+        page_num: 1,
+        max_page: 1,
         stats,
       });
     }
@@ -305,17 +333,15 @@ export async function runSuperhomeImportStep(): Promise<ImportRunState & { progr
     if (!(await isRunActive())) {
       return getImportState();
     }
-    const msg = e instanceof Error ? e.message : "Step failed";
-    stats.categoriesFailed += 1;
-    leafIndex += 1;
-    pageNum = 1;
-    maxPage = 1;
+    const msg = e instanceof Error ? e.message : "Batch step failed";
+    leafIndex = batchEnd;
+    stats.categoriesFailed += batch.length;
     await updateRun({
       status: "running",
-      message: `Skipped ${pathLabel}: ${msg}`,
+      message: `Batch error (${leafIndex} / ${leafPaths.length}): ${msg}`,
       leaf_index: leafIndex,
-      page_num: pageNum,
-      max_page: maxPage,
+      page_num: 1,
+      max_page: 1,
       stats,
     });
   }

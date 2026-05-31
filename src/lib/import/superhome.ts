@@ -1,5 +1,6 @@
 import { newId } from "@/lib/db/id";
 import { pool, query, type DbClient } from "@/lib/db/pool";
+import { importConcurrency, runPool } from "@/lib/import/concurrency";
 
 export const SUPERHOME_BASE = "https://superhome.com.cy";
 export const SUPERHOME_HOME = `${SUPERHOME_BASE}/`;
@@ -40,6 +41,14 @@ export function emptyStats(): ImportStats {
     categoriesDone: 0,
     categoriesFailed: 0,
   };
+}
+
+export function mergeImportStats(into: ImportStats, from: ImportStats) {
+  into.productsUpserted += from.productsUpserted;
+  into.productsFailed += from.productsFailed;
+  into.productsSkipped += from.productsSkipped;
+  into.categoriesDone += from.categoriesDone;
+  into.categoriesFailed += from.categoriesFailed;
 }
 
 export function titleCase(slug: string) {
@@ -175,8 +184,18 @@ export async function upsertCategoryTree(
   cache: Map<string, string>,
   client: DbClient = pool
 ) {
+  const byDepth = new Map<number, string[][]>();
   for (const segments of allPaths) {
-    await upsertCategory(segments, cache, client);
+    const depth = segments.length;
+    const list = byDepth.get(depth) ?? [];
+    list.push(segments);
+    byDepth.set(depth, list);
+  }
+  const depths = [...byDepth.keys()].sort((a, b) => a - b);
+  const { categories: concurrency } = importConcurrency();
+  for (const depth of depths) {
+    const paths = byDepth.get(depth) ?? [];
+    await runPool(paths, concurrency, (segments) => upsertCategory(segments, cache, client));
   }
 }
 
@@ -358,6 +377,36 @@ export async function upsertSuperhomeProduct(
   stats.productsUpserted++;
 }
 
+async function upsertProductsFromListing(
+  products: SuperhomeProductJson[],
+  categoryId: string,
+  categorySegments: string[],
+  stats: ImportStats,
+  client: DbClient = pool
+) {
+  const seen = new Set<string>();
+  const unique: SuperhomeProductJson[] = [];
+  for (const p of products) {
+    const sku = String(p.sku ?? p.mpn ?? "").trim();
+    if (!sku || seen.has(sku)) continue;
+    seen.add(sku);
+    unique.push(p);
+  }
+  if (unique.length === 0) return;
+
+  const { products: concurrency } = importConcurrency();
+  const parts = await runPool(unique, concurrency, async (p) => {
+    const part = emptyStats();
+    try {
+      await upsertSuperhomeProduct(p, categoryId, categorySegments, part, client);
+    } catch {
+      part.productsFailed++;
+    }
+    return part;
+  });
+  for (const part of parts) mergeImportStats(stats, part);
+}
+
 export async function importOneListingPage(
   segments: string[],
   pageNum: number,
@@ -372,18 +421,45 @@ export async function importOneListingPage(
   const html = await fetchSuperhomeHtml(url);
   const maxPage = parsePagination(html);
   const products = parseProductsFromHtml(html);
-  const seen = new Set<string>();
+  await upsertProductsFromListing(products, categoryId, segments, stats, client);
 
-  for (const p of products) {
-    const sku = String(p.sku ?? "").trim();
-    if (!sku || seen.has(sku)) continue;
-    seen.add(sku);
-    try {
-      await upsertSuperhomeProduct(p, categoryId, segments, stats, client);
-    } catch {
-      stats.productsFailed++;
-    }
-  }
+  return { maxPage, productCount: products.length };
+}
 
-  return { maxPage, productCount: seen.size };
+/** Fetch all listing pages for a leaf category in parallel, then upsert products. */
+export async function importLeafCategory(
+  segments: string[],
+  cache: Map<string, string>,
+  stats: ImportStats,
+  client: DbClient = pool
+): Promise<{ maxPage: number }> {
+  const categoryId = await upsertCategory(segments, cache, client);
+  const baseUrl = categoryUrlFromSegments(segments);
+  const { pages: pageConcurrency } = importConcurrency();
+
+  const firstHtml = await fetchSuperhomeHtml(baseUrl);
+  const maxPage = parsePagination(firstHtml);
+  await upsertProductsFromListing(
+    parseProductsFromHtml(firstHtml),
+    categoryId,
+    segments,
+    stats,
+    client
+  );
+
+  if (maxPage <= 1) return { maxPage };
+
+  const otherPages = Array.from({ length: maxPage - 1 }, (_, i) => i + 2);
+  await runPool(otherPages, pageConcurrency, async (pageNum) => {
+    const html = await fetchSuperhomeHtml(`${baseUrl}?PageNum=${pageNum}`);
+    await upsertProductsFromListing(
+      parseProductsFromHtml(html),
+      categoryId,
+      segments,
+      stats,
+      client
+    );
+  });
+
+  return { maxPage };
 }

@@ -51,6 +51,10 @@ for (const stmt of indexStatements) {
   await client.query(stmt);
 }
 
+const categoryFunctionsPath = path.join(__dirname, "..", "db", "category-functions.sql");
+await client.query(fs.readFileSync(categoryFunctionsPath, "utf8"));
+console.log("Applied category SQL functions");
+
 await client.query(`
   CREATE TABLE IF NOT EXISTS catalog_import_runs (
     id TEXT PRIMARY KEY,

@@ -4,12 +4,17 @@ import { getSessionUser, isAdmin } from "@/lib/auth/session";
 import { productSchema } from "@/lib/validators";
 import { jsonOk, jsonError } from "@/lib/api-response";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const user = await getSessionUser();
   if (!user || !isAdmin(user)) return jsonError("FORBIDDEN", "Admin only", 403);
 
-  const products = await repos.productsRepo.listProductsAdmin();
-  return jsonOk({ products });
+  const page = Math.max(1, parseInt(req.nextUrl.searchParams.get("page") ?? "1", 10) || 1);
+  const pageSize = Math.min(
+    100,
+    Math.max(1, parseInt(req.nextUrl.searchParams.get("pageSize") ?? "50", 10) || 50)
+  );
+  const result = await repos.productsRepo.listProductsAdmin({ page, pageSize });
+  return jsonOk(result);
 }
 
 export async function POST(req: NextRequest) {

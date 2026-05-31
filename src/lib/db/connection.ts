@@ -16,9 +16,14 @@ export function getPoolConfig(): PoolConfig {
     connectionString = raw.replace(/[?&]schema=[^&]*/g, "").replace(/\?$/, "");
   }
 
+  const poolMax = Math.max(
+    10,
+    Math.min(30, parseInt(process.env.PG_POOL_MAX ?? "20", 10) || 20)
+  );
+
   const config: PoolConfig = {
     connectionString,
-    max: 10,
+    max: poolMax,
   };
 
   const needsSsl =
