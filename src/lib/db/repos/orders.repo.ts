@@ -7,10 +7,10 @@ import {
   mapShipment,
   mapUser,
 } from "../mappers";
-import type { OrderWithRelations } from "../types";
+import type { OrderLine, OrderWithRelations, Shipment } from "../types";
 import { newId } from "../id";
 
-async function loadOrderLines(orderId: string, client?: DbClient) {
+async function loadOrderLines(orderId: string, client?: DbClient): Promise<OrderLine[]> {
   const { rows } = await query(
     `SELECT * FROM order_lines WHERE order_id = $1`,
     [orderId],
@@ -19,7 +19,7 @@ async function loadOrderLines(orderId: string, client?: DbClient) {
   return rows.map(mapOrderLine);
 }
 
-async function loadShipments(orderId: string, client?: DbClient) {
+async function loadShipments(orderId: string, client?: DbClient): Promise<Shipment[]> {
   const { rows } = await query(
     `SELECT * FROM shipments WHERE order_id = $1`,
     [orderId],
@@ -119,7 +119,10 @@ export async function listOrdersForAccount(accountId: string) {
   return result;
 }
 
-export async function getOrderById(id: string, accountId?: string) {
+export async function getOrderById(
+  id: string,
+  accountId?: string
+): Promise<OrderWithRelations | null> {
   const params: unknown[] = [id];
   let sql = `SELECT * FROM orders WHERE id = $1`;
   if (accountId) {

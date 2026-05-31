@@ -18,9 +18,9 @@ the Render **web service** was created with old settings. Fix it by **recreating
 4. **Apply** the blueprint from [`render.yaml`](render.yaml).
 5. Confirm **sdh-web** settings:
    - **Region:** Oregon (same as Postgres)
-   - **Build Command:** `npm ci && npm run build`
+   - **Build Command:** `npm ci --include=dev && npm run build` (or `npm ci && npm run build` after this repo’s build-deps fix)
    - **Start Command:** `sh scripts/render-start.sh`
-6. Deploy. Build log must show `Running build command 'npm ci && npm run build'` — **no** `prisma`.
+6. Deploy. Build log must show a build command with **no** `prisma`.
 
 ## Option B — Edit existing service
 
@@ -28,7 +28,7 @@ the Render **web service** was created with old settings. Fix it by **recreating
 
 | Field | Value |
 |-------|--------|
-| Build Command | `npm ci && npm run build` |
+| Build Command | `npm ci --include=dev && npm run build` |
 | Start Command | `sh scripts/render-start.sh` |
 | Region | Oregon |
 

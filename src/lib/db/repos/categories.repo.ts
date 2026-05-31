@@ -7,14 +7,16 @@ export async function listRootCategoriesWithChildren(): Promise<CategoryWithChil
     `SELECT * FROM categories ORDER BY sort_order ASC, name ASC`
   );
   const all = rows.map(mapCategory);
-  const roots = all.filter((c) => !c.parentId);
-  return roots.map((root) => ({
+  const roots = all.filter((c: Category) => !c.parentId);
+  return roots.map((root: Category) => ({
     ...root,
-    children: all.filter((c) => c.parentId === root.id).sort((a, b) => a.name.localeCompare(b.name)),
+    children: all
+      .filter((c: Category) => c.parentId === root.id)
+      .sort((a: Category, b: Category) => a.name.localeCompare(b.name)),
   }));
 }
 
-export async function listSubcategoriesByVertical(vertical: string) {
+export async function listSubcategoriesByVertical(vertical: string): Promise<Category[]> {
   const { rows } = await query(
     `SELECT * FROM categories WHERE vertical = $1 AND parent_id IS NOT NULL ORDER BY name ASC`,
     [vertical]

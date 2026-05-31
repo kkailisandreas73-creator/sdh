@@ -146,7 +146,7 @@ export async function findProductById(id: string): Promise<Product | null> {
   return rows[0] ? mapProduct(rows[0]) : null;
 }
 
-export async function listProductsAdmin() {
+export async function listProductsAdmin(): Promise<ProductDetail[]> {
   const { rows } = await query(
     `${productSelect} ORDER BY p.name ASC`
   );

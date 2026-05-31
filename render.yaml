@@ -14,7 +14,8 @@ services:
     plan: free
     region: oregon
     branch: main
-    buildCommand: npm ci && npm run build
+    # Install devDependencies for next build (TypeScript, types); NODE_ENV=production skips them otherwise.
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: sh scripts/render-start.sh
     healthCheckPath: /
     envVars:
