@@ -38,6 +38,9 @@ yarn-error.log*
 prisma/*.db
 prisma/*.db-journal
 
+# generated at install/build (prisma generate — no DB required)
+/src/generated/prisma
+
 # vercel
 .vercel
 

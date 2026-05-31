@@ -1,0 +1,51 @@
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import pg from "pg";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const MIGRATION_ID = "20260525180000_init_postgres";
+const sqlPath = path.join(
+  __dirname,
+  "..",
+  "prisma",
+  "migrations",
+  MIGRATION_ID,
+  "migration.sql"
+);
+
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  console.error("DATABASE_URL is not set");
+  process.exit(1);
+}
+
+const sql = fs.readFileSync(sqlPath, "utf8");
+const client = new pg.Client({ connectionString });
+
+console.log("Applying database schema (SQL, no Prisma CLI)...");
+await client.connect();
+
+await client.query(`
+  CREATE TABLE IF NOT EXISTS "_sdh_migrations" (
+    "id" TEXT PRIMARY KEY,
+    "applied_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )
+`);
+
+const existing = await client.query(
+  `SELECT 1 FROM "_sdh_migrations" WHERE "id" = $1`,
+  [MIGRATION_ID]
+);
+
+if (existing.rowCount === 0) {
+  await client.query(sql);
+  await client.query(`INSERT INTO "_sdh_migrations" ("id") VALUES ($1)`, [
+    MIGRATION_ID,
+  ]);
+  console.log(`Applied migration ${MIGRATION_ID}`);
+} else {
+  console.log(`Migration ${MIGRATION_ID} already applied`);
+}
+
+await client.end();

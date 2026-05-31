@@ -14,8 +14,8 @@ services:
     plan: free
     region: oregon
     branch: main
-    # Run the Node build script directly (npm run build:render triggers preinstall too early).
-    buildCommand: node scripts/render-build.mjs
+    # Legacy Render builds may still call `npx prisma migrate` — the prisma-stub package no-ops that.
+    buildCommand: npm ci && npm run build
     startCommand: sh scripts/render-start.sh
     healthCheckPath: /
     envVars:

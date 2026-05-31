@@ -2,12 +2,11 @@
 set -e
 
 export NEXTAUTH_URL="${RENDER_EXTERNAL_URL}"
-export SDH_RUN_MIGRATIONS=1
 
-echo "Running database migrations..."
-npx prisma migrate deploy
+echo "Applying schema..."
+node scripts/apply-schema.mjs
 
-echo "Seeding database (idempotent upserts)..."
-npx prisma db seed
+echo "Seeding database..."
+npx tsx prisma/seed.ts
 
 exec npm run start

@@ -22,8 +22,8 @@ B2B wholesale e-commerce for **industrial**, **DIY**, and **furniture** products
 ```bash
 npm install
 cp .env.example .env
-npx prisma migrate dev
-npx prisma db seed
+npx prisma@5.22.0 migrate dev
+npm run db:seed
 npm run dev
 ```
 
