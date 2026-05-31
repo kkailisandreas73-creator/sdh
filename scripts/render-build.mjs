@@ -1,5 +1,9 @@
 import { spawnSync } from "node:child_process";
 
+console.log(
+  "\n=== SDH build: node scripts/render-build.mjs (no prisma migrate/seed) ===\n"
+);
+
 // Placeholder URL — build must never use Render's internal Postgres hostname.
 process.env.DATABASE_URL =
   "postgresql://build:build@127.0.0.1:5432/build?schema=public";
