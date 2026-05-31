@@ -15,6 +15,9 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// Avoid static generation at build time (Render build cannot reach private DATABASE_URL).
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: {
     default: "Super Discount Wholesale",

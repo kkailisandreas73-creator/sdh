@@ -14,8 +14,8 @@ services:
     plan: free
     region: oregon
     branch: main
-    # Build must not touch the DB (no migrate here). DB host is only reachable from the same region at runtime.
-    buildCommand: npm ci && npm run build
+    # Single build entrypoint — do not add prisma migrate/seed here (see scripts/render-build.sh).
+    buildCommand: sh scripts/render-build.sh
     startCommand: sh scripts/render-start.sh
     healthCheckPath: /
     envVars:
