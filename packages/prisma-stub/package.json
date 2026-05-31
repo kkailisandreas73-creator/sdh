@@ -1,8 +1,0 @@
-{
-  "name": "prisma",
-  "version": "5.22.0",
-  "description": "Stub — real DB setup runs in scripts/render-start.sh (apply-schema + db/seed)",
-  "bin": {
-    "prisma": "./bin.js"
-  }
-}

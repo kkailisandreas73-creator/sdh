@@ -16,7 +16,7 @@ if (!connectionString) {
 const sql = fs.readFileSync(sqlPath, "utf8");
 const client = new pg.Client({ connectionString });
 
-console.log("Applying database schema (SQL, no Prisma CLI)...");
+console.log("Applying database schema...");
 await client.connect();
 
 await client.query(`
