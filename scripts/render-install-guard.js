@@ -21,7 +21,7 @@ The private host (dpg-...) is only reachable when the app STARTS in Oregon.
 
 In Render Dashboard → sdh-web → Settings, set EXACTLY:
 
-  Build Command:  npm run build:render
+  Build Command:  node scripts/render-build.mjs
   Start Command:  sh scripts/render-start.sh
   Region:         Oregon
 

@@ -14,8 +14,8 @@ services:
     plan: free
     region: oregon
     branch: main
-    # Do not add prisma migrate/seed to build — use npm run build:render only.
-    buildCommand: npm run build:render
+    # Run the Node build script directly (npm run build:render triggers preinstall too early).
+    buildCommand: node scripts/render-build.mjs
     startCommand: sh scripts/render-start.sh
     healthCheckPath: /
     envVars:

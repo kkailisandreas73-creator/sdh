@@ -59,7 +59,7 @@ Open [http://localhost:3000](http://localhost:3000).
 **If deploy fails with `P1001: Can't reach database server`:**
 
 1. **Web service region** must be **Oregon** (same as Postgres). `render.yaml` does not move an existing service — change it under **Settings → Region**.
-2. **Build Command** must be **only** `npm run build:render` (not `npm ci && npx prisma migrate deploy ...`).
+2. **Build Command** must be **only** `node scripts/render-build.mjs` (not `npm run build:render` and not `npm ci && prisma migrate ...`).
 3. **Start Command** must be `sh scripts/render-start.sh` (migrations run when the app starts).
 4. **Environment → `DATABASE_URL`** must use the **Internal** URL from your Oregon Postgres instance.
 5. **Blueprint → Sync** (if you used a blueprint) so dashboard settings match `render.yaml`.
@@ -70,7 +70,7 @@ Open [http://localhost:3000](http://localhost:3000).
 |---------|--------|
 | Type | Web Service |
 | Region | **Oregon** (must match Postgres region for internal `DATABASE_URL`) |
-| Build | `npm run build:render` |
+| Build | `node scripts/render-build.mjs` |
 | Start | `sh scripts/render-start.sh` |
 | Publish Directory | *(leave empty — not for Next.js server apps)* |
 
