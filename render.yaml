@@ -14,9 +14,9 @@ services:
     plan: free
     region: oregon
     branch: main
+    # Build must not touch the DB (no migrate here). DB host is only reachable from the same region at runtime.
     buildCommand: npm ci && npm run build
-    preDeployCommand: npx prisma migrate deploy && npx prisma db seed
-    startCommand: sh -c 'export NEXTAUTH_URL="${RENDER_EXTERNAL_URL}" && npm run start'
+    startCommand: sh scripts/render-start.sh
     healthCheckPath: /
     envVars:
       - key: NODE_ENV

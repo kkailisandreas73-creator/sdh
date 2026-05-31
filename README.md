@@ -56,6 +56,14 @@ Open [http://localhost:3000](http://localhost:3000).
 4. Wait for deploy (~5–10 min). First deploy runs migrations + seed (demo users).
 5. Open your app URL (`https://sdh-web-xxxx.onrender.com`). `NEXTAUTH_URL` is set automatically from `RENDER_EXTERNAL_URL`.
 
+**If deploy fails with `P1001: Can't reach database server`:**
+
+1. **Web service region** must be **Oregon** (same as Postgres). `render.yaml` does not move an existing service — change it under **Settings → Region**.
+2. **Build Command** must be `npm ci && npm run build` only (no `prisma migrate` in build).
+3. **Start Command** must be `sh scripts/render-start.sh` (migrations run when the app starts).
+4. **Environment → `DATABASE_URL`** must use the **Internal** URL from your Oregon Postgres instance.
+5. **Blueprint → Sync** (if you used a blueprint) so dashboard settings match `render.yaml`.
+
 **Manual Web Service** (if not using Blueprint):
 
 | Setting | Value |
@@ -63,8 +71,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | Type | Web Service |
 | Region | **Oregon** (must match Postgres region for internal `DATABASE_URL`) |
 | Build | `npm ci && npm run build` |
-| Pre-Deploy | `npx prisma migrate deploy && npx prisma db seed` |
-| Start | `sh -c 'export NEXTAUTH_URL="${RENDER_EXTERNAL_URL}" && npm run start'` |
+| Start | `sh scripts/render-start.sh` |
 | Publish Directory | *(leave empty — not for Next.js server apps)* |
 
 Link a Render Postgres instance and set `DATABASE_URL`, `AUTH_SECRET`, `AUTH_TRUST_HOST=true`.
