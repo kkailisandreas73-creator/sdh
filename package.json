@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "preinstall": "node scripts/render-install-guard.js",
     "build": "next build",
+    "build:render": "node scripts/render-build.mjs",
     "start": "next start -H 0.0.0.0",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",

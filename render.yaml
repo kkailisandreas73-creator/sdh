@@ -14,8 +14,8 @@ services:
     plan: free
     region: oregon
     branch: main
-    # Single build entrypoint — do not add prisma migrate/seed here (see scripts/render-build.sh).
-    buildCommand: sh scripts/render-build.sh
+    # Do not add prisma migrate/seed to build — use npm run build:render only.
+    buildCommand: npm run build:render
     startCommand: sh scripts/render-start.sh
     healthCheckPath: /
     envVars:
