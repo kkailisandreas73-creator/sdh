@@ -14,7 +14,7 @@ export default async function AdminOrdersPage() {
             <div className="flex flex-wrap justify-between gap-2">
               <div>
                 <p className="font-mono text-sm">{order.id}</p>
-                <p className="text-sm">{order.account.companyName}</p>
+                <p className="text-sm">{order.account?.companyName ?? "—"}</p>
               </div>
               <div className="text-right">
                 <p className="font-semibold">{formatCurrency(order.total)}</p>

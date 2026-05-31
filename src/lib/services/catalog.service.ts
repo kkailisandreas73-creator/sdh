@@ -1,11 +1,9 @@
-import { prisma } from "@/lib/db";
-import type { Prisma } from "@/generated/prisma";
+import { repos } from "@/lib/db";
+import type { ProductDetail } from "@/lib/db/types";
 import type { PublicProduct } from "@/types";
 import { verticalFromSlug } from "@/lib/utils";
 
-function mapProduct(
-  product: Awaited<ReturnType<typeof fetchProductInclude>>
-): PublicProduct {
+export function mapProduct(product: ProductDetail): PublicProduct {
   const available =
     (product.inventory?.quantityOnHand ?? 0) -
     (product.inventory?.reserved ?? 0);
@@ -29,25 +27,8 @@ function mapProduct(
   };
 }
 
-const productInclude = {
-  category: true,
-  images: { orderBy: { sortOrder: "asc" as const } },
-  inventory: true,
-};
-
-async function fetchProductInclude(where: { id?: string; slug?: string }) {
-  return prisma.product.findFirstOrThrow({
-    where: { ...where, isActive: true },
-    include: productInclude,
-  });
-}
-
 export async function listCategories() {
-  return prisma.category.findMany({
-    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-    include: { children: { orderBy: { name: "asc" } } },
-    where: { parentId: null },
-  });
+  return repos.categoriesRepo.listRootCategoriesWithChildren();
 }
 
 export async function listProductsPublic(params: {
@@ -59,43 +40,17 @@ export async function listProductsPublic(params: {
 }): Promise<{ items: PublicProduct[]; total: number; page: number; pageSize: number }> {
   const page = params.page ?? 1;
   const pageSize = params.pageSize ?? 24;
-  const skip = (page - 1) * pageSize;
-
   const vertical = params.vertical ? verticalFromSlug(params.vertical) : null;
-
-  const where: Prisma.ProductWhereInput = {
-    isActive: true,
-    ...(vertical
-      ? { category: { vertical } }
-      : {}),
-    ...(params.category
-      ? { category: { slug: params.category } }
-      : {}),
-    ...(params.q
-      ? {
-          OR: [
-            { name: { contains: params.q } },
-            { sku: { contains: params.q } },
-            { tags: { contains: params.q.toLowerCase() } },
-            { brand: { contains: params.q } },
-          ],
-        }
-      : {}),
-  };
-
-  const [products, total] = await Promise.all([
-    prisma.product.findMany({
-      where,
-      include: productInclude,
-      orderBy: { name: "asc" },
-      skip,
-      take: pageSize,
-    }),
-    prisma.product.count({ where }),
-  ]);
-
+  const { items, total } = await repos.productsRepo.listProducts({
+    vertical,
+    categorySlug: params.category,
+    q: params.q,
+    page,
+    pageSize,
+    activeOnly: true,
+  });
   return {
-    items: products.map(mapProduct),
+    items: items.map(mapProduct),
     total,
     page,
     pageSize,
@@ -105,12 +60,12 @@ export async function listProductsPublic(params: {
 export async function getProductBySlugPublic(
   slug: string
 ): Promise<PublicProduct | null> {
-  const product = await prisma.product.findFirst({
-    where: { slug, isActive: true },
-    include: productInclude,
+  const product = await repos.productsRepo.findProductDetail({
+    slug,
+    activeOnly: true,
   });
   if (!product) return null;
   return mapProduct(product);
 }
 
-export { mapProduct, productInclude };
+export { mapProduct as mapProductFromDetail };

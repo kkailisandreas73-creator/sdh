@@ -1,8 +1,0 @@
-{
-  "name": "prisma",
-  "version": "5.22.0",
-  "description": "Stub so Render legacy build commands do not run real Prisma migrate against the DB",
-  "bin": {
-    "prisma": "./bin.js"
-  }
-}

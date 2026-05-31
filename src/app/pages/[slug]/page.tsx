@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/db";
+import { repos } from "@/lib/db";
 
 export default async function StaticPage({
   params,
@@ -7,7 +7,7 @@ export default async function StaticPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const page = await prisma.staticPage.findUnique({ where: { slug } });
+  const page = await repos.staticPagesRepo.findStaticPageBySlug(slug);
   if (!page) notFound();
 
   return (

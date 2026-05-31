@@ -5,14 +5,7 @@ import pg from "pg";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MIGRATION_ID = "20260525180000_init_postgres";
-const sqlPath = path.join(
-  __dirname,
-  "..",
-  "prisma",
-  "migrations",
-  MIGRATION_ID,
-  "migration.sql"
-);
+const sqlPath = path.join(__dirname, "..", "db", "schema.sql");
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {

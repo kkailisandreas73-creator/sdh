@@ -13,16 +13,20 @@ B2B wholesale e-commerce for **industrial**, **DIY**, and **furniture** products
 ## Stack
 
 - Next.js 16 (App Router), TypeScript, Tailwind CSS
-- Prisma 5 + SQLite (local dev; switch to PostgreSQL for production)
+- PostgreSQL with **plain SQL** via `pg` ([`src/lib/db/repos`](src/lib/db/repos))
 - NextAuth.js v5 (credentials)
 - Stripe (optional; dev mode completes orders without keys)
 
 ## Quick start
 
+Requires PostgreSQL (local Docker, Render, or cloud).
+
 ```bash
 npm install
 cp .env.example .env
-npx prisma@5.22.0 migrate dev
+# Edit .env — set DATABASE_URL to your Postgres connection string
+
+npm run db:schema
 npm run db:seed
 npm run dev
 ```
@@ -44,45 +48,19 @@ Open [http://localhost:3000](http://localhost:3000).
 | `npm run build` | Production build |
 | `npm test` | Unit tests (Vitest) |
 | `npm run test:e2e` | E2E tests (Playwright) |
-| `npm run db:seed` | Reseed database |
+| `npm run db:schema` | Apply [`db/schema.sql`](db/schema.sql) |
+| `npm run db:seed` | Load demo data |
 
 ## Deploy on Render (free tier)
 
 1. Push this repo to GitHub.
 2. In [Render](https://render.com): **New → Blueprint**.
-3. Connect repo `sdh` — Render reads [`render.yaml`](render.yaml) and creates:
-   - **Web Service** (`sdh-web`, free)
-   - **PostgreSQL** (`sdh-db`, free — expires after 90 days on free plan; upgrade for production)
-4. Wait for deploy (~5–10 min). First deploy runs migrations + seed (demo users).
-5. Open your app URL (`https://sdh-web-xxxx.onrender.com`). `NEXTAUTH_URL` is set automatically from `RENDER_EXTERNAL_URL`.
+3. Connect repo `sdh` — Render reads [`render.yaml`](render.yaml).
+4. **Web service region: Oregon** (same as Postgres).
+5. **Build:** `npm ci && npm run build`
+6. **Start:** `sh scripts/render-start.sh` (applies schema + seed, then starts the app)
 
-**If deploy fails with `P1001: Can't reach database server`:**
-
-1. **Web service region** must be **Oregon** (same as Postgres). `render.yaml` does not move an existing service — change it under **Settings → Region**.
-2. **Build Command** must be **only** `node scripts/render-build.mjs` (not `npm run build:render` and not `npm ci && prisma migrate ...`).
-3. **Start Command** must be `sh scripts/render-start.sh` (migrations run when the app starts).
-4. **Environment → `DATABASE_URL`** must use the **Internal** URL from your Oregon Postgres instance.
-5. **Blueprint → Sync** (if you used a blueprint) so dashboard settings match `render.yaml`.
-
-**Manual Web Service** (if not using Blueprint):
-
-| Setting | Value |
-|---------|--------|
-| Type | Web Service |
-| Region | **Oregon** (must match Postgres region for internal `DATABASE_URL`) |
-| Build | `node scripts/render-build.mjs` |
-| Start | `sh scripts/render-start.sh` |
-| Publish Directory | *(leave empty — not for Next.js server apps)* |
-
-Link a Render Postgres instance and set `DATABASE_URL`, `AUTH_SECRET`, `AUTH_TRUST_HOST=true`.
-
-**Free tier notes:** Service sleeps after ~15 min idle (cold start ~30s). Use **Web Service**, not Static Site.
-
-## Production (other hosts)
-
-1. PostgreSQL `DATABASE_URL` (included in Render blueprint).
-2. `AUTH_SECRET` / `NEXTAUTH_SECRET`, `NEXTAUTH_URL` (public app URL).
-3. Configure Stripe keys and webhook (`/api/v1/webhooks/stripe`).
+**Free tier notes:** Service sleeps after ~15 min idle. Postgres free tier expires after 90 days.
 
 ## API
 

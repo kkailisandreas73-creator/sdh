@@ -1,7 +1,7 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
-import { prisma } from "@/lib/db";
+import { repos } from "@/lib/db";
 import type { SessionUser } from "@/types";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -17,23 +17,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const password = credentials?.password as string | undefined;
         if (!email || !password) return null;
 
-        const user = await prisma.user.findUnique({
-          where: { email: email.toLowerCase() },
-          include: { account: true },
-        });
-        if (!user) return null;
+        const row = await repos.usersRepo.findUserWithAccount(email);
+        if (!row) return null;
 
-        const valid = await bcrypt.compare(password, user.passwordHash);
+        const valid = await bcrypt.compare(password, row.user.passwordHash);
         if (!valid) return null;
 
         return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role as "BUYER" | "ADMIN",
-          accountId: user.accountId,
-          accountStatus: user.account?.status ?? null,
-          paymentTerms: user.account?.paymentTerms ?? null,
+          id: row.user.id,
+          email: row.user.email,
+          name: row.user.name,
+          role: row.user.role as "BUYER" | "ADMIN",
+          accountId: row.user.accountId,
+          accountStatus: row.account?.status ?? null,
+          paymentTerms: row.account?.paymentTerms ?? null,
         };
       },
     }),
@@ -52,15 +49,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.accountStatus = u.accountStatus;
         token.paymentTerms = u.paymentTerms;
       } else if (token.id) {
-        const dbUser = await prisma.user.findUnique({
-          where: { id: token.id as string },
-          include: { account: true },
-        });
-        if (dbUser) {
-          token.role = dbUser.role;
-          token.accountId = dbUser.accountId;
-          token.accountStatus = dbUser.account?.status ?? null;
-          token.paymentTerms = dbUser.account?.paymentTerms ?? null;
+        const row = await repos.usersRepo.findUserWithAccountById(
+          token.id as string
+        );
+        if (row) {
+          token.role = row.user.role;
+          token.accountId = row.user.accountId;
+          token.accountStatus = row.account?.status ?? null;
+          token.paymentTerms = row.account?.paymentTerms ?? null;
         }
       }
       return token;

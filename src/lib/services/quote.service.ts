@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import { repos } from "@/lib/db";
 import { getCartView, clearCart } from "@/lib/services/cart.service";
 import { createOrderFromLines } from "@/lib/services/order.service";
 
@@ -15,32 +15,25 @@ export async function submitQuote(params: {
   }
   if (lines.length === 0) throw new Error("EMPTY_CART");
 
-  const quote = await prisma.quote.create({
-    data: {
-      accountId: params.accountId,
-      userId: params.userId,
-      status: "SUBMITTED",
-      buyerNotes: params.buyerNotes,
-      submittedAt: new Date(),
-      lines: {
-        create: lines.map((l) => ({
-          productId: l.productId,
-          quantity: l.quantity,
-          requestedPrice: l.product.unitPrice,
-        })),
-      },
-    },
-    include: { lines: { include: { product: true } } },
+  const quote = await repos.quotesRepo.createQuoteWithLines({
+    accountId: params.accountId,
+    userId: params.userId,
+    status: "SUBMITTED",
+    buyerNotes: params.buyerNotes,
+    submittedAt: new Date(),
+    lines: lines.map((l) => ({
+      productId: l.productId,
+      quantity: l.quantity,
+      requestedPrice: l.product.unitPrice,
+    })),
   });
 
-  await prisma.auditLog.create({
-    data: {
-      actorId: params.userId,
-      entity: "Quote",
-      entityId: quote.id,
-      action: "SUBMITTED",
-      payload: JSON.stringify({ lineCount: lines.length }),
-    },
+  await repos.auditRepo.createAuditLog({
+    actorId: params.userId,
+    entity: "Quote",
+    entityId: quote.id,
+    action: "SUBMITTED",
+    payload: JSON.stringify({ lineCount: lines.length }),
   });
 
   return quote;
@@ -52,28 +45,19 @@ export async function adminPriceQuote(
   adminNotes?: string
 ) {
   for (const line of lines) {
-    await prisma.quoteLine.update({
-      where: { id: line.lineId },
-      data: { quotedUnitPrice: line.quotedUnitPrice },
-    });
+    await repos.quotesRepo.updateQuoteLinePrice(line.lineId, line.quotedUnitPrice);
   }
-  return prisma.quote.update({
-    where: { id: quoteId },
-    data: {
-      status: "QUOTED",
-      adminNotes,
-      quotedAt: new Date(),
-      validUntil: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-    },
-    include: { lines: { include: { product: true } } },
+  return repos.quotesRepo.updateQuoteAdmin(quoteId, {
+    status: "QUOTED",
+    adminNotes,
+    quotedAt: new Date(),
+    validUntil: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
   });
 }
 
 export async function acceptQuote(quoteId: string, userId: string) {
-  const quote = await prisma.quote.findFirstOrThrow({
-    where: { id: quoteId, userId, status: "QUOTED" },
-    include: { lines: { include: { product: true } } },
-  });
+  const quote = await repos.quotesRepo.findQuoteForUser(quoteId, userId, "QUOTED");
+  if (!quote) throw new Error("NOT_FOUND");
 
   const orderLines = quote.lines.map((l) => ({
     productId: l.productId,
@@ -93,31 +77,16 @@ export async function acceptQuote(quoteId: string, userId: string) {
     status: "AWAITING_PAYMENT",
   });
 
-  await prisma.quote.update({
-    where: { id: quoteId },
-    data: { status: "CONVERTED" },
-  });
+  await repos.quotesRepo.updateQuoteStatus(quoteId, "CONVERTED");
 
   await clearCart(userId);
   return order;
 }
 
 export async function listQuotesForAccount(accountId: string) {
-  return prisma.quote.findMany({
-    where: { accountId },
-    orderBy: { createdAt: "desc" },
-    include: { lines: { include: { product: true } } },
-  });
+  return repos.quotesRepo.listQuotesForAccount(accountId);
 }
 
 export async function listAllQuotes(status?: string) {
-  return prisma.quote.findMany({
-    where: status ? { status } : undefined,
-    orderBy: { createdAt: "desc" },
-    include: {
-      lines: { include: { product: true } },
-      account: true,
-      user: true,
-    },
-  });
+  return repos.quotesRepo.listAllQuotes(status);
 }

@@ -13,8 +13,8 @@ export default async function AdminQuotesPage() {
           <div key={quote.id} className="rounded-lg border bg-white p-4">
             <div className="flex justify-between">
               <div>
-                <p className="font-semibold">{quote.account.companyName}</p>
-                <p className="text-sm text-slate-500">{quote.user.email}</p>
+                <p className="font-semibold">{quote.account?.companyName ?? "—"}</p>
+                <p className="text-sm text-slate-500">{quote.user?.email ?? "—"}</p>
               </div>
               <span className="rounded bg-slate-100 px-2 py-0.5 text-xs">
                 {quote.status}

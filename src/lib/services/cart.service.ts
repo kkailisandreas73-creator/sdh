@@ -1,13 +1,13 @@
-import { prisma } from "@/lib/db";
+import { repos } from "@/lib/db";
+import { mapProduct } from "@/lib/services/catalog.service";
 import { priceProduct } from "@/lib/services/pricing.service";
-import { mapProduct, productInclude } from "@/lib/services/catalog.service";
 import type { CartLineView } from "@/types";
 import { getLineEligibility } from "@/lib/services/checkout.service";
 
 export async function getOrCreateCart(userId: string) {
-  let cart = await prisma.cart.findUnique({ where: { userId } });
+  let cart = await repos.cartRepo.findCartByUserId(userId);
   if (!cart) {
-    cart = await prisma.cart.create({ data: { userId } });
+    cart = await repos.cartRepo.createCart(userId);
   }
   return cart;
 }
@@ -17,10 +17,7 @@ export async function getCartView(
   accountId: string | null
 ): Promise<{ items: CartLineView[]; subtotal: number }> {
   const cart = await getOrCreateCart(userId);
-  const items = await prisma.cartItem.findMany({
-    where: { cartId: cart.id },
-    include: { product: { include: productInclude } },
-  });
+  const items = await repos.cartRepo.listCartItemsWithProducts(cart.id);
 
   const lines: CartLineView[] = [];
   let subtotal = 0;
@@ -45,17 +42,13 @@ export async function getCartView(
 }
 
 export async function addToCart(userId: string, productId: string, quantity: number) {
-  const product = await prisma.product.findUniqueOrThrow({ where: { id: productId } });
+  const product = await repos.productsRepo.findProductById(productId);
+  if (!product) throw new Error("NOT_FOUND");
   if (quantity < product.moq) {
     throw new Error(`MOQ is ${product.moq}`);
   }
   const cart = await getOrCreateCart(userId);
-  await prisma.cartItem.upsert({
-    where: { cartId_productId: { cartId: cart.id, productId } },
-    update: { quantity },
-    create: { cartId: cart.id, productId, quantity },
-  });
-  await prisma.cart.update({ where: { id: cart.id }, data: { updatedAt: new Date() } });
+  await repos.cartRepo.upsertCartItem(cart.id, productId, quantity);
 }
 
 export async function updateCartItem(
@@ -64,25 +57,24 @@ export async function updateCartItem(
   quantity: number
 ) {
   const cart = await getOrCreateCart(userId);
-  const item = await prisma.cartItem.findFirst({
-    where: { id: itemId, cartId: cart.id },
-    include: { product: true },
-  });
+  const item = await repos.cartRepo.findCartItem(cart.id, itemId);
   if (!item) throw new Error("NOT_FOUND");
-  if (quantity < item.product.moq) throw new Error(`MOQ is ${item.product.moq}`);
+  const product = await repos.productsRepo.findProductById(item.productId);
+  if (!product) throw new Error("NOT_FOUND");
+  if (quantity < product.moq) throw new Error(`MOQ is ${product.moq}`);
   if (quantity <= 0) {
-    await prisma.cartItem.delete({ where: { id: itemId } });
+    await repos.cartRepo.deleteCartItem(itemId);
   } else {
-    await prisma.cartItem.update({ where: { id: itemId }, data: { quantity } });
+    await repos.cartRepo.updateCartItemQuantity(itemId, quantity);
   }
 }
 
 export async function removeCartItem(userId: string, itemId: string) {
   const cart = await getOrCreateCart(userId);
-  await prisma.cartItem.deleteMany({ where: { id: itemId, cartId: cart.id } });
+  await repos.cartRepo.deleteCartItemScoped(cart.id, itemId);
 }
 
 export async function clearCart(userId: string) {
   const cart = await getOrCreateCart(userId);
-  await prisma.cartItem.deleteMany({ where: { cartId: cart.id } });
+  await repos.cartRepo.deleteCartItemsByCart(cart.id);
 }

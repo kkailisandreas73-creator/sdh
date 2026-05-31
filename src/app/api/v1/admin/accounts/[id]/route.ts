@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { prisma } from "@/lib/db";
+import { repos } from "@/lib/db";
 import { getSessionUser, isAdmin } from "@/lib/auth/session";
 import { jsonOk, jsonError } from "@/lib/api-response";
 
@@ -14,24 +14,26 @@ export async function PATCH(
   const body = await req.json();
   const { status, paymentTerms } = body;
 
-  const account = await prisma.account.update({
-    where: { id },
-    data: {
-      ...(status ? { status, approvedAt: status === "ACTIVE" ? new Date() : null, approvedById: user.id } : {}),
-      ...(paymentTerms ? { paymentTerms } : {}),
-    },
-    include: { users: true },
+  const account = await repos.accountsRepo.updateAccount(id, {
+    ...(status
+      ? {
+          status,
+          approvedAt: status === "ACTIVE" ? new Date() : null,
+          approvedById: user.id,
+        }
+      : {}),
+    ...(paymentTerms ? { paymentTerms } : {}),
   });
 
-  await prisma.auditLog.create({
-    data: {
+  if (status) {
+    await repos.auditRepo.createAuditLog({
       actorId: user.id,
       entity: "Account",
       entityId: id,
       action: `STATUS_${status}`,
       payload: JSON.stringify(body),
-    },
-  });
+    });
+  }
 
   return jsonOk({ account });
 }

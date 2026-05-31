@@ -1,5 +1,5 @@
-import { prisma } from "@/lib/db";
-import { mapProduct, productInclude } from "@/lib/services/catalog.service";
+import { repos } from "@/lib/db";
+import { getProductBySlugPublic } from "@/lib/services/catalog.service";
 import type { PricedProduct, PublicProduct } from "@/types";
 
 export async function resolveUnitPrice(
@@ -8,28 +8,25 @@ export async function resolveUnitPrice(
   accountId?: string | null
 ): Promise<{ unitPrice: number; tiers: { minQty: number; unitPrice: number }[] }> {
   if (accountId) {
-    const override = await prisma.accountPriceOverride.findFirst({
-      where: {
-        accountId,
-        productId,
-        OR: [{ validTo: null }, { validTo: { gte: new Date() } }],
-      },
-      orderBy: { validFrom: "desc" },
-    });
+    const override = await repos.pricingRepo.findActiveOverride(
+      accountId,
+      productId
+    );
     if (override) {
-      return { unitPrice: override.unitPrice, tiers: [{ minQty: 1, unitPrice: override.unitPrice }] };
+      return {
+        unitPrice: override.unitPrice,
+        tiers: [{ minQty: 1, unitPrice: override.unitPrice }],
+      };
     }
   }
 
-  const priceList = await prisma.priceList.findFirst({
-    where: { isDefault: true },
-  });
+  const priceList = await repos.pricingRepo.findDefaultPriceList();
   if (!priceList) return { unitPrice: 0, tiers: [] };
 
-  const tiers = await prisma.priceTier.findMany({
-    where: { priceListId: priceList.id, productId },
-    orderBy: { minQty: "asc" },
-  });
+  const tiers = await repos.pricingRepo.findTiersForProduct(
+    priceList.id,
+    productId
+  );
 
   if (tiers.length === 0) return { unitPrice: 0, tiers: [] };
 
@@ -48,9 +45,7 @@ export async function priceProduct(
   const { unitPrice, tiers } = await resolveUnitPrice(product.id, quantity, accountId);
   const available = product.inStock;
   const canInstantCheckout =
-    product.allowInstantCheckout &&
-    !product.quoteOnly &&
-    available;
+    product.allowInstantCheckout && !product.quoteOnly && available;
 
   return {
     ...product,
@@ -65,12 +60,8 @@ export async function getPricedProductBySlug(
   accountId?: string | null,
   quantity = 1
 ): Promise<PricedProduct | null> {
-  const product = await prisma.product.findFirst({
-    where: { slug, isActive: true },
-    include: productInclude,
-  });
-  if (!product) return null;
-  const publicProduct = mapProduct(product);
+  const publicProduct = await getProductBySlugPublic(slug);
+  if (!publicProduct) return null;
   return priceProduct(publicProduct, quantity, accountId);
 }
 

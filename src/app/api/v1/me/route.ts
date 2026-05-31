@@ -1,23 +1,24 @@
+import { repos } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth/session";
-import { prisma } from "@/lib/db";
 import { jsonOk, jsonError } from "@/lib/api-response";
 
 export async function GET() {
-  const user = await getSessionUser();
-  if (!user) return jsonError("UNAUTHORIZED", "Not logged in", 401);
+  const session = await getSessionUser();
+  if (!session) return jsonError("UNAUTHORIZED", "Not signed in", 401);
 
-  const dbUser = await prisma.user.findUnique({
-    where: { id: user.id },
-    include: { account: { include: { addresses: true } } },
-  });
+  const profile = await repos.usersRepo.findUserProfile(session.id);
+  if (!profile) return jsonError("NOT_FOUND", "User not found", 404);
 
+  const { user: dbUser, account, addresses } = profile;
   return jsonOk({
     user: {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      account: dbUser?.account,
+      id: dbUser.id,
+      email: dbUser.email,
+      name: dbUser.name,
+      role: dbUser.role,
+      accountId: dbUser.accountId,
+      account,
+      addresses,
     },
   });
 }

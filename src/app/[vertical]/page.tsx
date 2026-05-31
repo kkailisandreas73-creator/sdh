@@ -4,7 +4,7 @@ import { listPricedProducts } from "@/lib/services/pricing.service";
 import { getSessionUser, isActiveBuyer } from "@/lib/auth/session";
 import { verticalFromSlug } from "@/lib/utils";
 import { ProductCard } from "@/components/catalog/ProductCard";
-import { prisma } from "@/lib/db";
+import { repos } from "@/lib/db";
 
 export default async function VerticalPage({
   params,
@@ -25,10 +25,9 @@ export default async function VerticalPage({
   const title =
     verticalSlug.charAt(0).toUpperCase() + verticalSlug.slice(1);
 
-  const subcategories = await prisma.category.findMany({
-    where: { vertical, parentId: { not: null } },
-    orderBy: { name: "asc" },
-  });
+  const subcategories = await repos.categoriesRepo.listSubcategoriesByVertical(
+    vertical
+  );
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10">
@@ -44,7 +43,7 @@ export default async function VerticalPage({
             <a
               key={c.id}
               href={`/${verticalSlug}?category=${c.slug}`}
-              className="rounded-full border border-slate-300 px-3 py-1 text-sm hover:border-[#c41e3a]"
+              className="rounded-full border bg-white px-3 py-1 text-sm hover:border-[#c41e3a]"
             >
               {c.name}
             </a>

@@ -1,49 +1,57 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth/session";
-import { prisma } from "@/lib/db";
+import { repos } from "@/lib/db";
 
 export default async function ProfilePage() {
-  const user = await getSessionUser();
-  if (!user) redirect("/login");
+  const session = await getSessionUser();
+  if (!session) redirect("/login");
 
-  const dbUser = await prisma.user.findUnique({
-    where: { id: user.id },
-    include: { account: { include: { addresses: true } } },
-  });
+  const profile = await repos.usersRepo.findUserProfile(session.id);
+  if (!profile) redirect("/login");
+
+  const { user: dbUser, account, addresses } = profile;
 
   return (
-    <div className="mx-auto max-w-lg px-4 py-10">
+    <div className="mx-auto max-w-2xl px-4 py-10">
       <h1 className="text-2xl font-bold">Profile</h1>
-      <dl className="mt-6 space-y-3">
+      <dl className="mt-6 space-y-3 text-sm">
         <div>
-          <dt className="text-sm text-slate-500">Email</dt>
-          <dd>{user.email}</dd>
+          <dt className="font-medium text-slate-500">Name</dt>
+          <dd>{dbUser.name ?? "—"}</dd>
         </div>
         <div>
-          <dt className="text-sm text-slate-500">Name</dt>
-          <dd>{user.name ?? "—"}</dd>
+          <dt className="font-medium text-slate-500">Email</dt>
+          <dd>{dbUser.email}</dd>
         </div>
-        <div>
-          <dt className="text-sm text-slate-500">Role</dt>
-          <dd>{user.role}</dd>
-        </div>
-        {dbUser?.account && (
+        {account && (
           <>
             <div>
-              <dt className="text-sm text-slate-500">Company</dt>
-              <dd>{dbUser.account.companyName}</dd>
+              <dt className="font-medium text-slate-500">Company</dt>
+              <dd>{account.companyName}</dd>
             </div>
             <div>
-              <dt className="text-sm text-slate-500">Account status</dt>
-              <dd>{dbUser.account.status}</dd>
+              <dt className="font-medium text-slate-500">Account status</dt>
+              <dd>{account.status}</dd>
             </div>
             <div>
-              <dt className="text-sm text-slate-500">Payment terms</dt>
-              <dd>{dbUser.account.paymentTerms}</dd>
+              <dt className="font-medium text-slate-500">Payment terms</dt>
+              <dd>{account.paymentTerms}</dd>
             </div>
           </>
         )}
       </dl>
+      {addresses.length > 0 && (
+        <section className="mt-8">
+          <h2 className="font-semibold">Addresses</h2>
+          <ul className="mt-2 space-y-2 text-sm">
+            {addresses.map((a) => (
+              <li key={a.id} className="rounded border bg-white p-3">
+                {a.line1}, {a.city}, {a.state} {a.zip}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }

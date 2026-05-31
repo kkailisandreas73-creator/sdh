@@ -7,6 +7,6 @@ echo "Applying schema..."
 node scripts/apply-schema.mjs
 
 echo "Seeding database..."
-npx tsx prisma/seed.ts
+npx tsx db/seed.ts
 
 exec npm run start

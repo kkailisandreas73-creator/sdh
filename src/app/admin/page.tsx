@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { prisma } from "@/lib/db";
+import { repos } from "@/lib/db";
 
 export default async function AdminDashboard() {
   const [pending, orders, quotes] = await Promise.all([
-    prisma.account.count({ where: { status: "PENDING" } }),
-    prisma.order.count(),
-    prisma.quote.count({ where: { status: "SUBMITTED" } }),
+    repos.accountsRepo.countPendingAccounts(),
+    repos.ordersRepo.countOrders(),
+    repos.ordersRepo.countQuotesByStatus("SUBMITTED"),
   ]);
 
   return (
@@ -18,11 +18,11 @@ export default async function AdminDashboard() {
         </Link>
         <Link href="/admin/orders" className="rounded-lg border bg-white p-6 hover:shadow">
           <p className="text-3xl font-bold text-[#1e3a5f]">{orders}</p>
-          <p className="text-sm text-slate-600">Total orders</p>
+          <p className="text-sm text-slate-600">Orders</p>
         </Link>
         <Link href="/admin/quotes" className="rounded-lg border bg-white p-6 hover:shadow">
-          <p className="text-3xl font-bold text-amber-600">{quotes}</p>
-          <p className="text-sm text-slate-600">Quotes awaiting review</p>
+          <p className="text-3xl font-bold text-[#1e3a5f]">{quotes}</p>
+          <p className="text-sm text-slate-600">Quotes to review</p>
         </Link>
       </div>
     </div>

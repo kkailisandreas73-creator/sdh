@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import { withTransaction, repos } from "@/lib/db";
 import { getCartView, clearCart } from "@/lib/services/cart.service";
 import Stripe from "stripe";
 
@@ -9,13 +9,15 @@ export async function getLineEligibility(
   productId: string,
   quantity: number
 ): Promise<"instant" | "quoteOnly"> {
-  const product = await prisma.product.findUniqueOrThrow({
-    where: { id: productId },
-    include: { inventory: true },
+  const product = await repos.productsRepo.findProductDetail({
+    id: productId,
+    activeOnly: true,
   });
+  if (!product) throw new Error("NOT_FOUND");
   if (product.quoteOnly || !product.allowInstantCheckout) return "quoteOnly";
   const available =
-    (product.inventory?.quantityOnHand ?? 0) - (product.inventory?.reserved ?? 0);
+    (product.inventory?.quantityOnHand ?? 0) -
+    (product.inventory?.reserved ?? 0);
   if (available < quantity) return "quoteOnly";
   return "instant";
 }
@@ -38,12 +40,6 @@ export async function createInstantOrder(params: {
   const lines = await getInstantEligibleLines(params.userId, params.accountId);
   if (lines.length === 0) throw new Error("NO_INSTANT_LINES");
 
-  const quoteOnly = await getCartView(params.userId, params.accountId);
-  const blocked = quoteOnly.items.filter((l) => l.eligibility !== "instant");
-  if (blocked.length > 0 && lines.length < quoteOnly.items.length) {
-    // partial instant allowed only if caller passes only instant - for full cart check
-  }
-
   const subtotal = lines.reduce((s, l) => s + l.lineTotal, 0);
   const tax = subtotal * TAX_RATE;
   const shipping = SHIPPING_FLAT;
@@ -54,43 +50,45 @@ export async function createInstantOrder(params: {
   const status =
     paymentMethod === "INVOICE_NET30" ? "AWAITING_PAYMENT" : "DRAFT";
 
-  const order = await prisma.order.create({
-    data: {
-      accountId: params.accountId,
-      userId: params.userId,
-      status,
-      paymentMethod,
-      subtotal,
-      tax,
-      shipping,
-      total,
-      poNumber: params.poNumber,
-      lines: {
-        create: lines.map((l) => ({
+  const order = await withTransaction(async (client) => {
+    const created = await repos.ordersRepo.createOrderWithLines(
+      {
+        accountId: params.accountId,
+        userId: params.userId,
+        status,
+        paymentMethod,
+        subtotal,
+        tax,
+        shipping,
+        total,
+        poNumber: params.poNumber,
+        lines: lines.map((l) => ({
           productId: l.productId,
-          skuSnapshot: l.product.sku,
-          nameSnapshot: l.product.name,
+          sku: l.product.sku,
+          name: l.product.name,
           quantity: l.quantity,
           unitPrice: l.product.unitPrice,
           lineTotal: l.lineTotal,
         })),
       },
-    },
-    include: { lines: true },
+      client
+    );
+    for (const line of lines) {
+      await repos.inventoryRepo.reserveInventory(
+        line.productId,
+        line.quantity,
+        client
+      );
+    }
+    return created;
   });
-
-  for (const line of lines) {
-    await prisma.inventory.update({
-      where: { productId: line.productId },
-      data: { reserved: { increment: line.quantity } },
-    });
-  }
 
   return order;
 }
 
 export async function createStripePaymentIntent(orderId: string) {
-  const order = await prisma.order.findUniqueOrThrow({ where: { id: orderId } });
+  const order = await repos.ordersRepo.getOrderById(orderId);
+  if (!order) throw new Error("NOT_FOUND");
   if (!process.env.STRIPE_SECRET_KEY) {
     return { clientSecret: null, mock: true, orderId: order.id };
   }
@@ -100,28 +98,23 @@ export async function createStripePaymentIntent(orderId: string) {
     currency: "usd",
     metadata: { orderId: order.id },
   });
-  await prisma.order.update({
-    where: { id: order.id },
-    data: { stripePaymentIntentId: intent.id },
-  });
+  await repos.ordersRepo.updateOrderStripeIntent(order.id, intent.id);
   return { clientSecret: intent.client_secret, orderId: order.id };
 }
 
 export async function markOrderPaid(orderId: string) {
-  await prisma.order.update({
-    where: { id: orderId },
-    data: { status: "PAID" },
+  await withTransaction(async (client) => {
+    await repos.ordersRepo.updateOrderStatus(orderId, "PAID", undefined, client);
+    const order = await repos.ordersRepo.getOrderById(orderId);
+    if (!order) return;
+    for (const line of order.lines) {
+      await repos.inventoryRepo.fulfillInventory(
+        line.productId,
+        line.quantity,
+        client
+      );
+    }
   });
-  const lines = await prisma.orderLine.findMany({ where: { orderId } });
-  for (const line of lines) {
-    await prisma.inventory.update({
-      where: { productId: line.productId },
-      data: {
-        quantityOnHand: { decrement: line.quantity },
-        reserved: { decrement: line.quantity },
-      },
-    });
-  }
 }
 
 export async function finalizeInstantCheckout(
