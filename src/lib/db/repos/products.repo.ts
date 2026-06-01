@@ -1,5 +1,5 @@
 import { query, type DbClient } from "../pool";
-import { mapCategory, mapInventory, mapProduct } from "../mappers";
+import { mapInventory, mapProduct } from "../mappers";
 import type { Product, ProductDetail } from "../types";
 
 async function loadImages(productIds: string[], client?: DbClient) {

@@ -1,5 +1,5 @@
 import { newId } from "@/lib/db/id";
-import { pool, query, type DbClient } from "@/lib/db/pool";
+import { pool, type DbClient } from "@/lib/db/pool";
 import { importConcurrency, runPool } from "@/lib/import/concurrency";
 
 export const SUPERHOME_BASE = "https://superhome.com.cy";

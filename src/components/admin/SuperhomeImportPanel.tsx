@@ -106,8 +106,17 @@ export function SuperhomeImportPanel() {
   }, [appendLog]);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    let cancelled = false;
+    (async () => {
+      const res = await fetch("/api/v1/admin/import/superhome");
+      if (cancelled || !res.ok) return;
+      const data = await res.json();
+      if (data.state) setState(data.state);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleStart() {
     if (

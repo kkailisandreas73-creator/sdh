@@ -3,7 +3,7 @@ import { repos } from "@/lib/db";
 
 /** Legacy /industrial, /diy, /furniture URLs → first root category or home */
 export default async function LegacyVerticalPage({
-  params,
+  params: _params,
 }: {
   params: Promise<{ vertical: string }>;
 }) {
