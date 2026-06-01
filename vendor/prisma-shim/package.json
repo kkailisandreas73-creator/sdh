@@ -1,0 +1,9 @@
+{
+  "name": "prisma",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Shim so legacy CI/build steps run apply-schema instead of Prisma",
+  "bin": {
+    "prisma": "cli.mjs"
+  }
+}

@@ -14,6 +14,7 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Legacy CommonJS scripts (not part of the app bundle)
     "scripts/**/*.js",
+    "vendor/**",
   ]),
   {
     rules: {

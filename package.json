@@ -39,6 +39,7 @@
     "@types/bcryptjs": "^2.4.6",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
+    "prisma": "file:vendor/prisma-shim",
     "vitest": "^4.1.7"
   }
 }
