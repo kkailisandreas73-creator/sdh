@@ -2,8 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { formatCurrency } from "@/lib/utils";
-
 export default function CheckoutPage() {
   const router = useRouter();
   const [addressId, setAddressId] = useState("");

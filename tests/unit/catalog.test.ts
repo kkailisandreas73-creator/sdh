@@ -2,7 +2,12 @@ import { describe, it, expect } from "vitest";
 import type { PublicProduct, PricedProduct } from "@/types";
 
 function stripPrice(product: PricedProduct): PublicProduct {
-  const { unitPrice: _u, tiers: _t, canInstantCheckout: _c, ...rest } = product;
+  const {
+    unitPrice: _unitPrice,
+    tiers: _tiers,
+    canInstantCheckout: _canInstantCheckout,
+    ...rest
+  } = product;
   return rest;
 }
 

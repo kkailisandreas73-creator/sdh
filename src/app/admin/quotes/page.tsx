@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { listAllQuotes } from "@/lib/services/quote.service";
 import { AdminQuoteForm } from "@/components/admin/AdminQuoteForm";
 

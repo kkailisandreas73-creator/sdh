@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { getSessionUser, isActiveBuyer } from "@/lib/auth/session";
+import { getSessionUser } from "@/lib/auth/session";
 import { getOrder } from "@/lib/services/order.service";
 import { formatCurrency } from "@/lib/utils";
 
