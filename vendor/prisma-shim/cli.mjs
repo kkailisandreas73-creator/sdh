@@ -12,6 +12,7 @@ function run(command) {
 
 if (cmd === "migrate" && sub === "deploy") {
   run("node scripts/apply-schema.mjs");
+  run("npm run db:seed");
   process.exit(0);
 }
 
